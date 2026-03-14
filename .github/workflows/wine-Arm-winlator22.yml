@@ -347,7 +347,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 9. 构建 native wine64（严格模仿成功示例，并备份完整 nls 目录）
+      # 9. 构建 native wine64（日志优化 + LDFLAGS="-s"）
       # ------------------------------------------------------------
       - name: 构建 native wine64 工具和 NLS（带完整备份）
         run: |
@@ -357,10 +357,17 @@ jobs:
           cd ${{ env.WINE64_DIR }}
           mkdir -p amd64
           cd amd64
+
+          # 配置时加入剥离符号标志，减小工具体积
+          export LDFLAGS="-s"
           ../source/configure --enable-win64 --prefix=/usr/local
-          make __tooldeps__ -j$(nproc)
-          echo "构建 NLS 目录..."
-          make -C nls
+
+          # 编译工具集，静默模式，输出重定向到文件，失败时显示尾部
+          make -s __tooldeps__ -j$(nproc) > build_tools.log 2>&1 || { tail -n 200 build_tools.log; exit 1; }
+
+          # 编译 nls，同样处理
+          make -s -C nls > build_nls.log 2>&1 || { tail -n 200 build_nls.log; exit 1; }
+
           # 备份整个 nls 目录（跟随符号链接）
           mkdir -p /opt/nls-backup
           cp -aL nls/. /opt/nls-backup/
@@ -405,8 +412,7 @@ jobs:
           echo "复制后 locale.nls 存在，大小: $(wc -c < /opt/wine64-native/nls/locale.nls) 字节"
 
       # ------------------------------------------------------------
-      # 11. 交叉编译 ARM64 WOW64（使用复制后的目录作为工具目录）
-      #     修改：移除 --with-wine64，仅使用 --with-wine-tools 以强制重新编译 programs
+      # 11. 交叉编译 ARM64 WOW64（日志优化 + 添加 LDFLAGS="-s"）
       # ------------------------------------------------------------
       - name: 交叉编译 ARM64 WOW64
         run: |
@@ -418,8 +424,8 @@ jobs:
           export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig
           export CFLAGS="-O2 -pipe"
           export CXXFLAGS="-O2 -pipe"
-          # 根据 rules (4).txt 设置正确的 LDFLAGS，同时保留库搜索路径
-          export LDFLAGS="-Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
+          # 根据 rules (4).txt 设置正确的 LDFLAGS，同时保留库搜索路径，并添加 -s 剥离符号
+          export LDFLAGS="-Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib -s"
           export WINE_NLS_DIR=/opt/wine64-native/nls
 
           echo "使用 Wine64 构建目录（作为工具目录）: /opt/wine64-native"
@@ -440,8 +446,9 @@ jobs:
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
 
-          make -j$(nproc)
-          make install
+          # 编译，静默模式，输出重定向到文件
+          make -s -j$(nproc) > build_cross.log 2>&1 || { tail -n 200 build_cross.log; exit 1; }
+          make -s install > install_cross.log 2>&1 || { tail -n 200 install_cross.log; exit 1; }
 
           # 验证安装是否生成 bin 目录（若缺失则报错）
           if [ ! -d /tmp/wine-install-wow64/bin ]; then
@@ -556,6 +563,16 @@ jobs:
           fi
 
       # ------------------------------------------------------------
+      # 收集编译日志（新增）
+      # ------------------------------------------------------------
+      - name: 收集编译日志
+        run: |
+          mkdir -p logs
+          cp ${{ env.WINE64_DIR }}/amd64/*.log logs/ 2>/dev/null || true
+          cp ${{ env.WINE_SOURCE_DIR }}/source/build-arm64/*.log logs/ 2>/dev/null || true
+          tar -czf build-logs.tar.gz logs/
+
+      # ------------------------------------------------------------
       # 14. 打包
       # ------------------------------------------------------------
       - name: 准备打包
@@ -582,6 +599,7 @@ jobs:
           path: |
             *.tar.xz
             checksums.txt
+            build-logs.tar.gz
           retention-days: 30
 
       - name: 发布 Wine 到 GitHub Release
@@ -622,5 +640,6 @@ jobs:
           files: |
             ${{ github.workspace }}/${{ env.BUILD_NAME }}.tar.xz
             ${{ github.workspace }}/checksums.txt
+            ${{ github.workspace }}/build-logs.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
