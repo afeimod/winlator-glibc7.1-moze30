@@ -349,8 +349,16 @@ jobs:
 
           export PATH="/opt/${{ env.LLVMMINGW_NAME }}/bin:$PATH"
           export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig
-          export CFLAGS="-O2 -pipe"
-          export CXXFLAGS="-O2 -pipe"
+          # 交叉编译工具链前缀改为 aarch64
+          export CROSSCC="aarch64-w64-mingw32-gcc"
+          export CROSSCXX="aarch64-w64-mingw32-g++"
+          # 若需要，也可设置 CROSSAR、CROSSLD 等，但上述两个通常已足够
+
+          # 移除 x86 特有的指令集标志，使用 ARMv8-A 通用架构标志
+          export CFLAGS="-march=armv8-a -O3 -ftree-vectorize -pipe"
+          export CXXFLAGS="-march=armv8-a -O3 -ftree-vectorize -pipe"
+          export CROSSCFLAGS="-march=armv8-a -O3 -ftree-vectorize -pipe"
+          export CROSSCXXFLAGS="-march=armv8-a -O3 -ftree-vectorize -pipe"
           # 根据 rules (4).txt 设置正确的 LDFLAGS，同时保留库搜索路径
           export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
           export WINE_NLS_DIR=/opt/wine64-native/nls
