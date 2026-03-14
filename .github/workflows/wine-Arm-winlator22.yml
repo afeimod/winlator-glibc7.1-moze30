@@ -347,7 +347,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 9. 构建 native wine64（日志优化 + LDFLAGS="-s"）
+      # 9. 构建 native wine64（严格模仿成功示例，并备份完整 nls 目录）
       # ------------------------------------------------------------
       - name: 构建 native wine64 工具和 NLS（带完整备份）
         run: |
@@ -418,7 +418,7 @@ jobs:
           export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig
           export CFLAGS="-O2 -pipe"
           export CXXFLAGS="-O2 -pipe"
-          # 根据 rules (4).txt 设置正确的 LDFLAGS，同时保留库搜索路径，并添加 -s 剥离符号
+          # 根据 rules (4).txt 设置正确的 LDFLAGS，同时保留库搜索路径
           export LDFLAGS="-Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
           export WINE_NLS_DIR=/opt/wine64-native/nls
 
@@ -440,7 +440,6 @@ jobs:
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
 
-          # 编译，静默模式，输出重定向到文件
           make -s -j$(nproc) > build_cross.log 2>&1 || { tail -n 200 build_cross.log; exit 1; }
           make -s install > install_cross.log 2>&1 || { tail -n 200 install_cross.log; exit 1; }
 
@@ -557,16 +556,6 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 收集编译日志（新增）
-      # ------------------------------------------------------------
-      - name: 收集编译日志
-        run: |
-          mkdir -p logs
-          cp ${{ env.WINE64_DIR }}/amd64/*.log logs/ 2>/dev/null || true
-          cp ${{ env.WINE_SOURCE_DIR }}/source/build-arm64/*.log logs/ 2>/dev/null || true
-          tar -czf build-logs.tar.gz logs/
-
-      # ------------------------------------------------------------
       # 14. 打包
       # ------------------------------------------------------------
       - name: 准备打包
@@ -593,7 +582,6 @@ jobs:
           path: |
             *.tar.xz
             checksums.txt
-            build-logs.tar.gz
           retention-days: 30
 
       - name: 发布 Wine 到 GitHub Release
@@ -634,6 +622,5 @@ jobs:
           files: |
             ${{ github.workspace }}/${{ env.BUILD_NAME }}.tar.xz
             ${{ github.workspace }}/checksums.txt
-            ${{ github.workspace }}/build-logs.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
