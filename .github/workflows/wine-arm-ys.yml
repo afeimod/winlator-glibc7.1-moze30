@@ -262,7 +262,7 @@ jobs:
           # 仅设置优化标志，不设置针对 Termux 的链接器路径
           export CFLAGS="-O3 -pipe"
           export CXXFLAGS="-O3 -pipe"
-          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
+          export LDFLAGS=""
           # 不要设置 LDFLAGS，让构建工具使用系统默认链接器
           ../configure \
             --prefix=/tmp/wine-install-wow64 \
@@ -272,6 +272,8 @@ jobs:
             --disable-tests \
             --with-vulkan \
             --with-gstreamer
+            
+          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
 
           make -j$(nproc)
           make install
