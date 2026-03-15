@@ -23,7 +23,7 @@ on:
 
 env:
   LLVMMINGW_DATE: 20251202
-  LLVMMINGW_NAME: llvm-mingw-20251202-ucrt-ubuntu-22.04-aarch64   # 改为 aarch64 版本
+  LLVMMINGW_NAME: llvm-mingw-20251202-ucrt-ubuntu-22.04-aarch64   # ARM64 宿主版本
   WINE_SOURCE_DIR: /opt/wine-src
   DEBIAN_FRONTEND: noninteractive
 
@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   build-wine-native:
-    runs-on: ubuntu-22.04-arm          # 使用 GitHub 官方的 ARM64 runner
+    runs-on: ubuntu-22.04-arm          # GitHub 官方 ARM64 runner
     timeout-minutes: 180
 
     steps:
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # ------------------------------------------------------------
-      # 1. 安装所有构建依赖（不再需要多架构配置）
+      # 1. 安装所有构建依赖（ARM64 原生）
       # ------------------------------------------------------------
       - name: 安装构建依赖
         run: |
@@ -95,10 +95,11 @@ jobs:
             libcups2-dev \
             libxkbcommon-dev \
             libxkbregistry-dev \
-            libwayland-dev
+            libwayland-dev \
+            patchelf   # 添加 patchelf 用于修改二进制解释器
 
       # ------------------------------------------------------------
-      # 2. 安装 llvm-mingw 交叉编译工具链（ARM64 版）
+      # 2. 安装 llvm-mingw 交叉编译工具链（ARM64 宿主版）
       # ------------------------------------------------------------
       - name: 下载并安装 llvm-mingw (aarch64)
         run: |
@@ -129,7 +130,7 @@ jobs:
           WINE_BRANCH="${{ github.event.inputs.wine_branch || 'staging' }}"
           WINE_VERSION="${{ github.event.inputs.wine_version || 'latest' }}"
 
-          mkdir -p ${{ env.WINE_SOURCE_DIR }}
+          sudo mkdir -p ${{ env.WINE_SOURCE_DIR }}
           cd ${{ env.WINE_SOURCE_DIR }}
 
           case "$WINE_BRANCH" in
@@ -194,7 +195,7 @@ jobs:
           esac
 
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          BUILD_NAME="wine-${WINE_VERSION_ACTUAL}-${COMMIT_HASH}-${WINE_BRANCH}-arm64-wow64"
+          BUILD_NAME="wine-${WINE_VERSION_ACTUAL}-${COMMIT_HASH}-${WINE_BRANCH}-arm64-native"
           echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
           echo "WINE_VERSION_ACTUAL=$WINE_VERSION_ACTUAL" >> $GITHUB_ENV
           echo "源码准备完成，构建名称: $BUILD_NAME"
@@ -248,7 +249,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 8. 直接编译 ARM64 原生 Wine（支持多架构 Windows 程序）
+      # 8. 编译 ARM64 原生 Wine（不设置特殊 LDFLAGS）
       # ------------------------------------------------------------
       - name: 编译 ARM64 原生 Wine
         run: |
@@ -258,12 +259,10 @@ jobs:
 
           export PATH="/opt/${{ env.LLVMMINGW_NAME }}/bin:$PATH"
           export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig
+          # 仅设置优化标志，不设置针对 Termux 的链接器路径
           export CFLAGS="-O3 -pipe"
           export CXXFLAGS="-O3 -pipe"
-          # 设置正确的 LDFLAGS 以适应 Termux 环境
-          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
-
-          # 配置：主机为 aarch64-linux-gnu（默认），使用 clang 作为 mingw 编译器
+          # 不要设置 LDFLAGS，让构建工具使用系统默认链接器
           ../configure \
             --prefix=/tmp/wine-install-wow64 \
             --with-mingw=clang \
@@ -283,7 +282,24 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 9. 补全安装目录的运行时文件（与原逻辑一致）
+      # 9. 使用 patchelf 修改二进制文件的解释器和 RPATH 以适应 Termux
+      # ------------------------------------------------------------
+      - name: 修改二进制动态链接器路径（适配 Termux）
+        run: |
+          TARGET_DIR="/tmp/wine-install-wow64"
+          INTERPRETER="/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1"
+          RPATH="/data/data/com.winlator/files/imagefs/usr/lib"
+
+          find "$TARGET_DIR/bin" "$TARGET_DIR/lib" "$TARGET_DIR/lib64" -type f -executable 2>/dev/null | while read -r file; do
+            if file "$file" | grep -q "ELF.*executable"; then
+              echo "修改 $file"
+              patchelf --set-interpreter "$INTERPRETER" --set-rpath "$RPATH" "$file"
+            fi
+          done
+          echo "二进制文件链接器修改完成"
+
+      # ------------------------------------------------------------
+      # 10. 补全安装目录的运行时文件（与原逻辑一致）
       # ------------------------------------------------------------
       - name: 全面补全安装目录的运行时文件
         run: |
@@ -295,7 +311,6 @@ jobs:
 
           echo "=== 补全 share/wine/nls ==="
           mkdir -p "$TARGET_PREFIX/share/wine/nls"
-          # 从构建目录复制 nls 文件（如果存在）
           if [ -d "$BUILD_DIR/nls" ]; then
               cp -v "$BUILD_DIR/nls"/*.nls "$TARGET_PREFIX/share/wine/nls/" 2>/dev/null || echo "没有找到 .nls 文件"
           fi
@@ -361,7 +376,7 @@ jobs:
           done
 
       # ------------------------------------------------------------
-      # 10. 验证安装目录内容（可选）
+      # 11. 验证安装目录内容（可选）
       # ------------------------------------------------------------
       - name: 验证安装目录内容
         run: |
@@ -377,7 +392,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 11. 打包
+      # 12. 打包
       # ------------------------------------------------------------
       - name: 准备打包
         run: |
