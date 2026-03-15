@@ -269,7 +269,25 @@ jobs:
             ./fix_wine9.2_mfplat.sh
           fi
 
-      # ------------------------------------------------------------
+        # 新增修复步骤：处理 __bit_reference 文件
+# ------------------------------------------------------------
+      - name: 修复 msvcrt/__bit_reference 文件类型问题
+        run: |
+            cd ${{ env.WINE_SOURCE_DIR }}/source
+            if [ -f "dlls/msvcrt/__bit_reference" ]; then
+                echo "发现 dlls/msvcrt/__bit_reference 文件，正在修复..."
+                if grep -q '__bit_reference' dlls/msvcrt/Makefile.in 2>/dev/null; then
+                    sed -i 's/__bit_reference/__bit_reference.h/g' dlls/msvcrt/Makefile.in
+                    mv dlls/msvcrt/__bit_reference dlls/msvcrt/__bit_reference.h
+                    echo "已重命名为 __bit_reference.h 并更新 Makefile.in"
+                else
+                    rm dlls/msvcrt/__bit_reference
+                    echo "已删除无用的 __bit_reference 文件"
+                fi
+            else
+                echo "文件不存在，无需修复"
+            fi
+
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
       - name: 生成 configure 脚本
