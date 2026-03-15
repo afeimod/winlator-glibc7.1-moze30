@@ -96,7 +96,7 @@ jobs:
             libxkbcommon-dev \
             libxkbregistry-dev \
             libwayland-dev \
-            patchelf   # 添加 patchelf 用于修改二进制解释器
+            patchelf   # 添加 patchelf 用于修改二进制解释器（保留备用，但本方案未使用）
 
       # ------------------------------------------------------------
       # 2. 安装 llvm-mingw 交叉编译工具链（ARM64 宿主版）
@@ -239,7 +239,20 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 7. 生成 configure 脚本
+      # 7. 关键步骤：修改 GCC 默认动态链接器为 Termux 路径
+      # ------------------------------------------------------------
+      - name: 修改 GCC specs 以使用 Termux 动态链接器
+        run: |
+          # 导出当前 specs
+          gcc -dumpspecs | sed -e 's|/lib/ld-linux-aarch64.so.1|/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1|g' > /tmp/termux-gcc-specs
+          # 设置环境变量，使后续 gcc 调用使用修改后的 specs
+          echo "GCC_SPECS=/tmp/termux-gcc-specs" >> $GITHUB_ENV
+          # 可选：验证修改
+          echo "修改后的 dynamic_linker:"
+          grep -A1 dynamic_linker /tmp/termux-gcc-specs || true
+
+      # ------------------------------------------------------------
+      # 8. 生成 configure 脚本
       # ------------------------------------------------------------
       - name: 生成 configure 脚本
         run: |
@@ -249,7 +262,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 8. 编译 ARM64 原生 Wine（不设置特殊 LDFLAGS）
+      # 9. 编译 ARM64 原生 Wine（现在是以交叉编译模式进行）
       # ------------------------------------------------------------
       - name: 编译 ARM64 原生 Wine
         run: |
@@ -259,21 +272,21 @@ jobs:
 
           export PATH="/opt/${{ env.LLVMMINGW_NAME }}/bin:$PATH"
           export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig
-          # 仅设置优化标志，不设置针对 Termux 的链接器路径
           export CFLAGS="-O3 -pipe"
           export CXXFLAGS="-O3 -pipe"
+          # 不再设置 LDFLAGS，解释器路径已由 GCC specs 处理
           export LDFLAGS=""
-          # 不要设置 LDFLAGS，让构建工具使用系统默认链接器
+
+          # 配置：必须指定 --host，因为现在编译的程序不能在当前 Ubuntu 上运行
           ../configure \
             --prefix=/tmp/wine-install-wow64 \
+            --host=aarch64-linux-gnu \
             --with-mingw=clang \
             --enable-archs=arm64ec,aarch64,i386 \
             --enable-tools \
             --disable-tests \
             --with-vulkan \
             --with-gstreamer
-            
-          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
 
           make -j$(nproc)
           make install
@@ -285,12 +298,16 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 9. 使用 patchelf 修改二进制文件的解释器和 RPATH 以适应 Termux
+      # 10. 可选：验证二进制文件的解释器是否为 Termux 路径
       # ------------------------------------------------------------
-
+      - name: 验证解释器路径
+        run: |
+          echo "检查 wine 二进制文件的解释器:"
+          readelf -l /tmp/wine-install-wow64/bin/wine | grep INTERP || echo "未找到 INTERP 段"
+          echo "预期应为: [Requesting program interpreter: /data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1]"
 
       # ------------------------------------------------------------
-      # 10. 补全安装目录的运行时文件（与原逻辑一致）
+      # 11. 补全安装目录的运行时文件（与原逻辑一致）
       # ------------------------------------------------------------
       - name: 全面补全安装目录的运行时文件
         run: |
@@ -367,7 +384,7 @@ jobs:
           done
 
       # ------------------------------------------------------------
-      # 11. 验证安装目录内容（可选）
+      # 12. 验证安装目录内容（可选）
       # ------------------------------------------------------------
       - name: 验证安装目录内容
         run: |
@@ -383,7 +400,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 12. 打包
+      # 13. 打包
       # ------------------------------------------------------------
       - name: 准备打包
         run: |
@@ -428,10 +445,10 @@ jobs:
             - **平台**: Termux (Android)
             - **图形 API**: Vulkan 支持已启用
             - **多媒体**: GStreamer 支持已启用
-            - **工具链**: llvm-mingw (aarch64) + 系统 gcc
+            - **工具链**: llvm-mingw (aarch64) + 系统 gcc (修改 specs 以使用 Termux 动态链接器)
 
             ## 特性
-            ✓ ARM64 原生编译，无需交叉编译
+            ✓ ARM64 原生编译，通过修改 GCC specs 直接链接到 Termux 解释器
             ✓ 支持运行 32/64 位 Windows 应用程序
             ✓ Vulkan 渲染
             ✓ GStreamer 多媒体后端
