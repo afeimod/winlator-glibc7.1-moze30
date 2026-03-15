@@ -286,17 +286,45 @@ jobs:
       # ------------------------------------------------------------
       - name: 修改二进制动态链接器路径（适配 Termux）
         run: |
-          TARGET_DIR="/tmp/wine-install-wow64"
-          INTERPRETER="/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1"
-          RPATH="/data/data/com.winlator/files/imagefs/usr/lib"
+            set -e  # 遇到错误立即退出，但循环内的错误不会中断循环（因为循环内未使用 set -e）
+            TARGET_DIR="/tmp/wine-install-wow64"
+            INTERPRETER="/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1"
+            RPATH="/data/data/com.winlator/files/imagefs/usr/lib"
 
-          find "$TARGET_DIR/bin" "$TARGET_DIR/lib" "$TARGET_DIR/lib64" -type f -executable 2>/dev/null | while read -r file; do
-            if file "$file" | grep -q "ELF.*executable"; then
-              echo "修改 $file"
-              patchelf --set-interpreter "$INTERPRETER" --set-rpath "$RPATH" "$file"
-            fi
-          done
-          echo "二进制文件链接器修改完成"
+            find "$TARGET_DIR/bin" "$TARGET_DIR/lib" "$TARGET_DIR/lib64" -type f -executable 2>/dev/null | while read -r file; do
+              # 跳过非 ELF 文件
+              if ! file "$file" | grep -q "ELF"; then
+                        continue
+              fi
+
+              # 获取 ELF 类型（EXEC = 可执行文件，DYN = 共享库）
+              elf_type=$(readelf -h "$file" 2>/dev/null | grep 'Type:' | head -1 | awk '{print $2}' | tr -d '(),')
+              if [ -z "$elf_type" ]; then
+                        echo "警告: 无法读取 $file 的 ELF 类型，跳过"
+                        continue
+              fi
+
+              case "$elf_type" in
+                        EXEC)
+                          # 可执行文件：检查是否有 INTERP 段（动态链接）
+                          if readelf -l "$file" 2>/dev/null | grep -q "INTERP"; then
+                                    echo "修改动态可执行文件: $file"
+                                    patchelf --set-interpreter "$INTERPRETER" --set-rpath "$RPATH" "$file"
+                          else
+                                    echo "跳过静态链接的可执行文件: $file"
+                          fi
+                          ;;
+                        DYN)
+                          # 共享库：只设置 RPATH，不设置解释器
+                          echo "修改共享库 RPATH: $file"
+                          patchelf --set-rpath "$RPATH" "$file"
+                          ;;
+                        *)
+                          echo "未知 ELF 类型 ($elf_type)，跳过: $file"
+                          ;;
+              esac
+            done
+            echo "二进制文件链接器修改完成"
 
       # ------------------------------------------------------------
       # 10. 补全安装目录的运行时文件（与原逻辑一致）
