@@ -324,8 +324,8 @@ jobs:
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
 
-          make -s -j$(nproc) > build_cross.log 2>&1 || { tail -n 200 build_cross.log; exit 1; }
-          make -s install > install_cross.log 2>&1 || { tail -n 200 install_cross.log; exit 1; }
+          make -j$(nproc) > build_cross.log 2>&1 || { tail -n 200 build_cross.log; exit 1; }
+          make install > install_cross.log 2>&1 || { tail -n 200 install_cross.log; exit 1; }
 
           # 验证安装是否生成 bin 目录（若缺失则报错）
           if [ ! -d /tmp/wine-install-wow64/bin ]; then
