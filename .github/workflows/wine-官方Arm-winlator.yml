@@ -284,12 +284,12 @@ jobs:
             echo "警告: 无法下载 winlator-wine.patch"
           fi
 
-          echo "下载并应用 winlator_dinput_xinput.patch..."
-          wget -q https://raw.githubusercontent.com/Waim908/wine-winlator/main/winlator-glibc/winlator_dinput_xinput.patch -O winlator_dinput_xinput.patch
-          if [ -f "winlator_dinput_xinput.patch" ]; then
-            patch -p1 < winlator_dinput_xinput.patch || { echo "警告: winlator_dinput_xinput.patch 应用失败，继续构建"; }
+          echo "下载并应用 winlator_dinput_xinput2.patch..."
+          wget -q https://raw.githubusercontent.com/Waim908/wine-winlator/main/winlator-glibc/winlator_dinput_xinput2.patch -O winlator_dinput_xinput2.patch
+          if [ -f "winlator_dinput_xinput2.patch" ]; then
+            patch -p1 < winlator_dinput_xinput2.patch || { echo "警告: winlator_dinput_xinput2.patch 应用失败，继续构建"; }
           else
-            echo "警告: 无法下载 winlator_dinput_xinput.patch"
+            echo "警告: 无法下载 winlator_dinput_xinput2.patch"
           fi
 
           echo "下载并应用 dinput_gamepad.patch..."
@@ -572,7 +572,7 @@ jobs:
             - **工具链**: llvm-mingw + 系统 gcc
             - **额外补丁**: 
               - winlator-wine.patch (来自 afeimod/winlator-glibc7.1-moze30)
-              - winlator_dinput_xinput.patch (来自 Waim908/wine-winlator)
+              - winlator_dinput_xinput2.patch (来自 Waim908/wine-winlator)
               - dinput_gamepad.patch (来自 Waim908/wine-winlator)
 
             ## 特性
