@@ -1,12 +1,12 @@
---- wine/programs/wineboot/wineboot.c	2025-07-30 22:02:41.000000000 +0800
-+++ wine-b/programs/wineboot/wineboot.c	2026-03-16 12:00:00.000000000 +0800
-@@ -535,7 +535,9 @@
-     SYSTEM_BASIC_INFORMATION *data;
+--- wine/programs/wineboot/wineboot.c
++++ wine/programs/wineboot/wineboot.c
+@@ -434,7 +434,9 @@
+     data->ActiveProcessorCount = NtCurrentTeb()->Peb->NumberOfProcessors;
+     data->ActiveGroupCount = 1;
  
-     data = heap_alloc( sizeof(*data) );
-     if (data) memset( data, 0, sizeof(*data) );
 +#if defined(__i386__) || defined(__x86_64__)
      initialize_xstate_features( data );
 +#endif
  
-     RtlGetNativeSystemInformation( SystemBasicInformation, data, sizeof(*data), NULL );
+     UnmapViewOfFile( data );
+ }
