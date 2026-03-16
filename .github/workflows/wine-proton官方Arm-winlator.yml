@@ -212,7 +212,7 @@ jobs:
           
 
           cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "下载补丁：https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/blob/old/paths/fix-wineboot-xstate.patch"
+          echo "下载补丁：https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/fix-wineboot-xstate.patch"
           wget -q -O fix-wineboot-xstate.patch https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/fix-wineboot-xstate.patch
 
           echo "正在应用补丁 ..."
@@ -324,8 +324,8 @@ jobs:
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
 
-          make -j$(nproc)
-          make install
+          make -s -j$(nproc) > build_cross.log 2>&1 || { tail -n 200 build_cross.log; exit 1; }
+          make -s install > install_cross.log 2>&1 || { tail -n 200 install_cross.log; exit 1; }
 
           # 验证安装是否生成 bin 目录（若缺失则报错）
           if [ ! -d /tmp/wine-install-wow64/bin ]; then
