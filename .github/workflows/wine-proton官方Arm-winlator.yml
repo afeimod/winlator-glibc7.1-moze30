@@ -213,7 +213,7 @@ jobs:
 
           cd ${{ env.WINE_SOURCE_DIR }}/source
           echo "下载补丁：https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/blob/old/paths/fix-wineboot-xstate.patch"
-          wget -q -O fix-wineboot-xstate.patch https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/blob/old/paths/fix-wineboot-xstate.patch
+          wget -q -O fix-wineboot-xstate.patch https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/fix-wineboot-xstate.patch
 
           echo "正在应用补丁 ..."
           patch -p1 < fix-wineboot-xstate.patch
