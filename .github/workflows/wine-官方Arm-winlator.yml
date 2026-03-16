@@ -270,7 +270,40 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 8. 生成 configure 脚本
+      # 8. 应用 Winlator 额外补丁
+      # ------------------------------------------------------------
+      - name: 应用 Winlator 额外补丁
+        run: |
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          
+          echo "下载并应用 winlator-wine.patch..."
+          wget -q https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/winlator-wine.patch -O winlator-wine.patch
+          if [ -f "winlator-wine.patch" ]; then
+            patch -p1 < winlator-wine.patch || { echo "警告: winlator-wine.patch 应用失败，继续构建"; }
+          else
+            echo "警告: 无法下载 winlator-wine.patch"
+          fi
+
+          echo "下载并应用 winlator_dinput_xinput.patch..."
+          wget -q https://raw.githubusercontent.com/Waim908/wine-winlator/main/winlator-glibc/winlator_dinput_xinput.patch -O winlator_dinput_xinput.patch
+          if [ -f "winlator_dinput_xinput.patch" ]; then
+            patch -p1 < winlator_dinput_xinput.patch || { echo "警告: winlator_dinput_xinput.patch 应用失败，继续构建"; }
+          else
+            echo "警告: 无法下载 winlator_dinput_xinput.patch"
+          fi
+
+          echo "下载并应用 dinput_gamepad.patch..."
+          wget -q https://raw.githubusercontent.com/Waim908/wine-winlator/main/winlator-glibc/dinput_gamepad.patch -O dinput_gamepad.patch
+          if [ -f "dinput_gamepad.patch" ]; then
+            patch -p1 < dinput_gamepad.patch || { echo "警告: dinput_gamepad.patch 应用失败，继续构建"; }
+          else
+            echo "警告: 无法下载 dinput_gamepad.patch"
+          fi
+
+          echo "所有额外补丁应用完成"
+
+      # ------------------------------------------------------------
+      # 9. 生成 configure 脚本
       # ------------------------------------------------------------
       - name: 生成 configure 脚本
         run: |
@@ -280,7 +313,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 9. 构建 native wine64（严格模仿成功示例，并备份完整 nls 目录）
+      # 10. 构建 native wine64（严格模仿成功示例，并备份完整 nls 目录）
       # ------------------------------------------------------------
       - name: 构建 native wine64 工具和 NLS（带完整备份）
         run: |
@@ -301,7 +334,7 @@ jobs:
           ls -la /opt/nls-backup/
 
       # ------------------------------------------------------------
-      # 10. 复制构建目录，跟随符号链接，并验证 NLS（带恢复机制）
+      # 11. 复制构建目录，跟随符号链接，并验证 NLS（带恢复机制）
       # ------------------------------------------------------------
       - name: 复制构建目录并验证 NLS（带恢复机制）
         run: |
@@ -338,8 +371,8 @@ jobs:
           echo "复制后 locale.nls 存在，大小: $(wc -c < /opt/wine64-native/nls/locale.nls) 字节"
 
       # ------------------------------------------------------------
-      # 11. 交叉编译 ARM64 WOW64（使用复制后的目录作为工具目录）
-      #     修改：移除 --with-wine64，仅使用 --with-wine-tools 以强制重新编译 programs
+      # 12. 交叉编译 ARM64 WOW64（使用复制后的目录作为工具目录）
+      #      修改：移除 --with-wine64，仅使用 --with-wine-tools 以强制重新编译 programs
       # ------------------------------------------------------------
       - name: 交叉编译 ARM64 WOW64
         run: |
@@ -385,7 +418,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 12. 全面补全安装目录的运行时文件（增强版：优先从 programs/ 查找）
+      # 13. 全面补全安装目录的运行时文件（增强版：优先从 programs/ 查找）
       # ------------------------------------------------------------
       - name: 全面补全安装目录的运行时文件（增强版）
         run: |
@@ -459,8 +492,6 @@ jobs:
               fi
           done
 
-          
-
           echo "=== 验证 bin 目录关键文件 ==="
           ls -la "$BIN_DIR"
           for required in wine wineserver wineboot; do
@@ -477,7 +508,7 @@ jobs:
           ls -la "$TARGET_PREFIX/bin/" || true
 
       # ------------------------------------------------------------
-      # 13. 验证安装目录内容（可选，便于调试）
+      # 14. 验证安装目录内容（可选，便于调试）
       # ------------------------------------------------------------
       - name: 验证安装目录内容
         run: |
@@ -493,7 +524,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 14. 打包
+      # 15. 打包
       # ------------------------------------------------------------
       - name: 准备打包
         run: |
@@ -539,6 +570,10 @@ jobs:
             - **图形 API**: Vulkan 支持已启用
             - **多媒体**: GStreamer 支持已启用
             - **工具链**: llvm-mingw + 系统 gcc
+            - **额外补丁**: 
+              - winlator-wine.patch (来自 afeimod/winlator-glibc7.1-moze30)
+              - winlator_dinput_xinput.patch (来自 Waim908/wine-winlator)
+              - dinput_gamepad.patch (来自 Waim908/wine-winlator)
 
             ## 特性
             ✓ ARM64 原生 Wine 可执行文件
