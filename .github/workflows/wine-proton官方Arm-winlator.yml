@@ -324,8 +324,15 @@ jobs:
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
 
-          make -j$(nproc) > build_cross.log 2>&1 || { tail -n 200 build_cross.log; exit 1; }
-          make install > install_cross.log 2>&1 || { tail -n 200 install_cross.log; exit 1; }
+          # 使用静默模式编译，同时将完整日志保存到文件（便于调试）
+          make -s -j$(nproc) 2>&1 | tee build_cross.log
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
+                echo "❌ 编译失败，最后200行日志："
+                tail -n 200 build_cross.log
+                exit 1
+            fi
+
+          make install
 
           # 验证安装是否生成 bin 目录（若缺失则报错）
           if [ ! -d /tmp/wine-install-wow64/bin ]; then
