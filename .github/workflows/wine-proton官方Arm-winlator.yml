@@ -209,9 +209,7 @@ jobs:
       # ------------------------------------------------------------
       - name: 下载并应用 fix-wineboot-xstate.patch
         run: |
-          set -e
-          # 确保 patch 命令可用
-          apt-get update && apt-get install -y --no-install-recommends patch
+          
 
           cd ${{ env.WINE_SOURCE_DIR }}/source
           echo "下载补丁：https://github.com/afeimod/winlator-glibc7.1-moze30/blob/old/paths/fix-wineboot-xstate.patch"
