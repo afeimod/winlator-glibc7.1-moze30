@@ -190,36 +190,6 @@ jobs:
       # ------------------------------------------------------------
       # 7. 应用来自 wine-termux 的 ffmpeg 构建补丁
       # ------------------------------------------------------------
-      - name: 下载并应用 fix-build_ffmpeg.patch
-        run: |
-          set -e
-          # 确保 patch 命令可用
-          apt-get update && apt-get install -y --no-install-recommends patch
-
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "下载补丁：https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch"
-          wget -q -O fix-build_ffmpeg.patch https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch
-
-          echo "正在应用补丁 ..."
-          patch -p1 < fix-build_ffmpeg.patch
-
-          echo "补丁应用成功，清理临时文件"
-          rm fix-build_ffmpeg.patch
-
-      # ------------------------------------------------------------
-      - name: 下载并应用 fix-wineboot-xstate.patch
-        run: |
-          
-
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "下载补丁：https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/fix-wineboot-xstate.patch"
-          wget -q -O fix-wineboot-xstate.patch https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/fix-wineboot-xstate.patch
-
-          echo "正在应用补丁 ..."
-          patch -p1 < fix-wineboot-xstate.patch
-
-          echo "补丁应用成功，清理临时文件"
-          rm fix-wineboot-xstate.patch
       
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
@@ -314,7 +284,7 @@ jobs:
           ../configure \
             --prefix=/tmp/wine-install-wow64 \
             --with-mingw=clang \
-            --enable-archs=aarch64,i386 \
+            --enable-archs=arm64ec,aarch64,i386 \
             --enable-tools \
             --disable-tests \
             --with-vulkan \
