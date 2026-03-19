@@ -273,6 +273,7 @@ jobs:
             --enable-tools \
             --disable-tests \
             --with-vulkan \
+            --with-wine-tools=/opt/wine64-native \
             --with-gstreamer
 
           make -j$(nproc)
