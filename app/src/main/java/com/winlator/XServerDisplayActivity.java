@@ -470,6 +470,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             containerDataChanged = true;
         }
 
+        String fexVersion = container.getFexVersion();
+        if (!fexVersion.equals(container.getExtra("fexVersion"))) {
+            extractFEXFiles(fexVersion);
+            container.putExtra("fexVersion", fexVersion);
+            containerDataChanged = true;
+        }
+
         if (dxwrapper.equals("cnc-ddraw")) envVars.put("CNC_DDRAW_CONFIG_FILE", "C:\\ProgramData\\cnc-ddraw\\ddraw.ini");
 
         String wincomponents = shortcut != null ? shortcut.getExtra("wincomponents", container.getWinComponents()) : container.getWinComponents();
@@ -513,17 +520,23 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         FileUtils.clear(imageFs.getTmpDir());
 
         boolean usrGlibc = preferences.getBoolean("use_glibc", true);
-        GuestProgramLauncherComponent guestProgramLauncherComponent = usrGlibc
-                ? new GlibcProgramLauncherComponent(contentsManager, contentsManager.getProfileByEntryName(container.getWineVersion()))
-                : new GuestProgramLauncherComponent();
+        GlibcProgramLauncherComponent launcherComponent = null;
+        if (usrGlibc) {
+            launcherComponent = new GlibcProgramLauncherComponent(contentsManager, container.getWineVersion());
+            launcherComponent.setFexPreset(container.getFexPreset());
+        }
+        
+        GuestProgramLauncherComponent guestProgramLauncherComponent = usrGlibc ? launcherComponent : new GuestProgramLauncherComponent();
 
         if (container != null) {
             if (container.getStartupSelection() == Container.STARTUP_SELECTION_AGGRESSIVE) winHandler.killProcess("services.exe");
 
             boolean wow64Mode = container.isWoW64Mode();
+            boolean isArm64ecWine = WineInfo.isArm64ecVersion(container.getWineVersion());
 //            String guestExecutable = wineInfo.getExecutable(this, wow64Mode)+" explorer /desktop=shell,"+xServer.screenInfo+" "+getWineStartCommand();
             String guestExecutable = "wine explorer /desktop=shell,"+xServer.screenInfo+" "+getWineStartCommand();
             guestProgramLauncherComponent.setWoW64Mode(wow64Mode);
+            guestProgramLauncherComponent.setArm64ecMode(isArm64ecWine);
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
             envVars.putAll(container.getEnvVars());
@@ -568,6 +581,15 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         guestProgramLauncherComponent.setEnvVars(envVars);
         guestProgramLauncherComponent.setTerminationCallback((status) -> finish());
+
+        boolean enableStartupDesktopLogs = preferences.getBoolean("enable_startup_desktop_logs", false);
+        if (enableStartupDesktopLogs) {
+            java.io.File logDir = new java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "Winlator");
+            logDir.mkdirs();
+            java.io.File logFile = new java.io.File(logDir, "startup_desktop_logs.txt");
+            guestProgramLauncherComponent.setLogFilePath(logFile.getAbsolutePath());
+        }
+
         environment.addComponent(guestProgramLauncherComponent);
 
         if (isGenerateWineprefix()) generateWineprefix();
@@ -918,6 +940,17 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                         TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "dxwrapper/" + dxwrapper + ".tzst", windowsDir, onExtractFileListener);
                 }
                 break;
+        }
+    }
+
+    private void extractFEXFiles(String fexVersion) {
+        File rootDir = imageFs.getRootDir();
+        File windowsDir = new File(rootDir, ImageFs.WINEPREFIX + "/drive_c/windows");
+        ContentProfile profile = contentsManager.getProfileByEntryName(fexVersion);
+        if (profile != null) {
+            contentsManager.applyContent(profile);
+        } else {
+            TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "FEXCore/" + fexVersion + ".tzst", windowsDir, onExtractFileListener);
         }
     }
 
