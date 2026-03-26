@@ -269,6 +269,18 @@ jobs:
           fi
 
       # ------------------------------------------------------------
+      - name: 应用游戏手柄相关补丁
+        run: |
+            cd ${{ env.WINE_SOURCE_DIR }}/source
+            # 下载补丁
+            wget -q https://github.com/Waim908/wine-winlator/raw/main/wine-glibc/ori_10/xinput_dinput_makefile.patch
+            wget -q https://github.com/Waim908/wine-winlator/raw/main/wine-glibc/ori_10/midimap_makefile.patch
+            wget -q https://github.com/Waim908/wine-winlator/raw/main/wine-glibc/ori_10/add_gamepad.patch
+            # 应用补丁，-p1 忽略补丁中第一级目录（wine-10.15/）
+            patch -p1 < xinput_dinput_makefile.patch || { echo "应用 xinput_dinput_makefile.patch 失败"; exit 1; }
+            patch -p1 < midimap_makefile.patch || { echo "应用 midimap_makefile.patch 失败"; exit 1; }
+            patch -p1 < add_gamepad.patch || { echo "应用 add_gamepad.patch 失败"; exit 1; }
+            echo "游戏手柄补丁应用完成"
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
       - name: 生成 configure 脚本
