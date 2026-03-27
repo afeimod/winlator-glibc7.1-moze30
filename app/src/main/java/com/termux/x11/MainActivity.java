@@ -25,6 +25,7 @@ import com.winlator.xserverbridge.IXServerBridge;
 import com.winlator.xserverbridge.TX11XServerBridge;
 import com.ewt45.winlator.E02_KeyInput;
 
+// native 中固定包名类名获取 java 函数，所以这个类不能移动或重命名
 public class MainActivity extends XServerDisplayActivity {
     private static final String TAG = "Tx11MainActivity";
     private static MainActivity instance = null;
@@ -47,15 +48,22 @@ public class MainActivity extends XServerDisplayActivity {
             LorieView.sendWindowChange(screenWidth, screenHeight, framerate, name);
         });
 
+        // 原 XServerDisplayActivity 逻辑
         super.onCreate(savedInstanceState);
 
+        // 添加 LorieView
         FrameLayout rootView = findViewById(R.id.FLXServerDisplay);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -1);
         lp.gravity = Gravity.CENTER;
         rootView.addView(lorieView, 0, lp);
+        // 桌面分辨率
         lorieView.p.set(xServer.screenInfo.width, xServer.screenInfo.height);
     }
 
+    /**
+     * CmdEntryPoint 会将自身作为 binder 放入 Intent,发送 ACTION_START 的广播,
+     * 该函数获取 binder 并尝试连接 x server 到 LorieView
+     */
     void onReceiveConnection(Intent intent) {
         Bundle bundle = intent == null ? null : intent.getBundleExtra(null);
         IBinder ibinder = bundle == null ? null : bundle.getBinder(null);
@@ -66,6 +74,7 @@ public class MainActivity extends XServerDisplayActivity {
         try {
             service.asBinder().linkToDeath(() -> {
                 service = null;
+
                 Log.v("Lorie", "Disconnected");
                 runOnUiThread(() -> {
                     LorieView.connect(-1);
@@ -109,29 +118,30 @@ public class MainActivity extends XServerDisplayActivity {
                 LorieView.connect(fd.detachFd());
                 getLorieView().triggerCallback();
                 clientConnectedStateChanged();
+//                getLorieView().reloadPreferences(prefs);
             } else
                 lorieView.postDelayed(this::tryConnect, 250);
         } catch (Exception e) {
             Log.e("MainActivity", "Something went wrong while we were establishing connection", e);
             service = null;
+
             lorieView.postDelayed(this::tryConnect, 250);
         }
         return false;
     }
 
     @Keep
+        // used in native code
     void clientConnectedStateChanged() {
         runOnUiThread(() -> {
             boolean connected = LorieView.connected();
             getLorieView().setVisibility(connected ? View.VISIBLE : View.INVISIBLE);
 
+            // We should recover connection in the case if file descriptor for some reason was broken...
             if (!connected)
                 tryConnect();
-            else {
+            else
                 getLorieView().setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_NULL));
-                // 连接成功后预热文本通道，解决初期输入丢失
-                E02_KeyInput.warmup(lorieView);
-            }
 
             onWindowFocusChanged(hasWindowFocus());
         });
@@ -150,6 +160,7 @@ public class MainActivity extends XServerDisplayActivity {
     @Override
     protected void setupUI() {
         super.setupUI();
+        // LorieView 放在了最下层，所以要隐藏原 xServerView 防止挡住
         FrameLayout rootView = findViewById(R.id.FLXServerDisplay);
         for (int i = 0; i < rootView.getChildCount(); i++) {
             if (rootView.getChildAt(i) instanceof XServerView) {
@@ -160,11 +171,13 @@ public class MainActivity extends XServerDisplayActivity {
 
     @Override
     protected boolean onXServerKeyboardKeyEvent(KeyEvent event) {
-        // 优先处理中文输入（ACTION_MULTIPLE 和 Unicode 字符）
-        if (E02_KeyInput.handleTX11TextInput(event, lorieView)) {
-            return true;
+        // 优先处理 ACTION_MULTIPLE 事件（输入法文本输入）
+        // 这解决了使用 TX11 替代 X Server 时无法输入中文的问题
+        if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
+            if (E02_KeyInput.handleTX11TextInput(event, lorieView)) {
+                return true;
+            }
         }
-        // 其他按键（功能键、ASCII 字符等）交给 KeyEventSender
         return KeyEventSender.instance.sendKeyEvent(event, lorieView);
     }
 
@@ -183,7 +196,7 @@ public class MainActivity extends XServerDisplayActivity {
         instance = null;
     }
 
-    @Keep
+    @Keep // used in native code
     public static MainActivity getInstance() {
         return instance;
     }
