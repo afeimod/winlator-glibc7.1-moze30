@@ -46,22 +46,25 @@ jobs:
       # ------------------------------------------------------------
       # 1. 配置 APT 源（支持 amd64 和 arm64，使用 Ubuntu 24.04 noble）
       # ------------------------------------------------------------
-      - name: 配置 APT 源（ARM64）
+      - name: 配置 APT 源（ARM64 + amd64）
         run: |
-            # 备份原配置
-            cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.bak 2>/dev/null || true
-    
-            # 写入新的源配置（以中科大为示例）
             cat > /etc/apt/sources.list.d/ubuntu.sources << 'EOF'
             Types: deb
-            URIs: http://mirrors.ustc.edu.cn/ubuntu-ports/
-            Suites: noble noble-updates noble-security
-            Components: main restricted universe multiverse
+            URIs: http://archive.ubuntu.com/ubuntu/
+            Suites: noble noble-updates noble-backports
+            Components: main universe restricted multiverse
             Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+            Architectures: amd64
+
+            Types: deb
+            URIs: http://ports.ubuntu.com/ubuntu-ports/
+            Suites: noble noble-updates noble-backports
+            Components: main universe restricted multiverse
+            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+            Architectures: arm64
             EOF
-    
-            # 添加 arm64 架构并更新
-            dpkg --add-architecture arm64
+
+            dpkg --add-architecture arm64  # 确保 arm64 支持
             apt-get update
 
       # ------------------------------------------------------------
