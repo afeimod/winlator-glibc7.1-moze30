@@ -31,9 +31,6 @@ public class MainActivity extends XServerDisplayActivity {
     private LorieView lorieView = null;
     protected ICmdEntryInterface service = null;
 
-    // 用于累积中文输入法的 ACTION_MULTIPLE 片段
-    private final StringBuilder pendingText = new StringBuilder();
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         Log.d(TAG, "onCreate: 启动 tx11 activity");
@@ -50,22 +47,15 @@ public class MainActivity extends XServerDisplayActivity {
             LorieView.sendWindowChange(screenWidth, screenHeight, framerate, name);
         });
 
-        // 原 XServerDisplayActivity 逻辑
         super.onCreate(savedInstanceState);
 
-        // 添加 LorieView
         FrameLayout rootView = findViewById(R.id.FLXServerDisplay);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -1);
         lp.gravity = Gravity.CENTER;
         rootView.addView(lorieView, 0, lp);
-        // 桌面分辨率
         lorieView.p.set(xServer.screenInfo.width, xServer.screenInfo.height);
     }
 
-    /**
-     * CmdEntryPoint 会将自身作为 binder 放入 Intent,发送 ACTION_START 的广播,
-     * 该函数获取 binder 并尝试连接 x server 到 LorieView
-     */
     void onReceiveConnection(Intent intent) {
         Bundle bundle = intent == null ? null : intent.getBundleExtra(null);
         IBinder ibinder = bundle == null ? null : bundle.getBinder(null);
@@ -76,7 +66,6 @@ public class MainActivity extends XServerDisplayActivity {
         try {
             service.asBinder().linkToDeath(() -> {
                 service = null;
-
                 Log.v("Lorie", "Disconnected");
                 runOnUiThread(() -> {
                     LorieView.connect(-1);
@@ -120,26 +109,22 @@ public class MainActivity extends XServerDisplayActivity {
                 LorieView.connect(fd.detachFd());
                 getLorieView().triggerCallback();
                 clientConnectedStateChanged();
-//                getLorieView().reloadPreferences(prefs);
             } else
                 lorieView.postDelayed(this::tryConnect, 250);
         } catch (Exception e) {
             Log.e("MainActivity", "Something went wrong while we were establishing connection", e);
             service = null;
-
             lorieView.postDelayed(this::tryConnect, 250);
         }
         return false;
     }
 
     @Keep
-        // used in native code
     void clientConnectedStateChanged() {
         runOnUiThread(() -> {
             boolean connected = LorieView.connected();
             getLorieView().setVisibility(connected ? View.VISIBLE : View.INVISIBLE);
 
-            // We should recover connection in the case if file descriptor for some reason was broken...
             if (!connected)
                 tryConnect();
             else
@@ -162,7 +147,6 @@ public class MainActivity extends XServerDisplayActivity {
     @Override
     protected void setupUI() {
         super.setupUI();
-        // LorieView 放在了最下层，所以要隐藏原 xServerView 防止挡住
         FrameLayout rootView = findViewById(R.id.FLXServerDisplay);
         for (int i = 0; i < rootView.getChildCount(); i++) {
             if (rootView.getChildAt(i) instanceof XServerView) {
@@ -173,11 +157,11 @@ public class MainActivity extends XServerDisplayActivity {
 
     @Override
     protected boolean onXServerKeyboardKeyEvent(KeyEvent event) {
-        // 将 pendingText 传递给 E02_KeyInput 用于累积
-        if (E02_KeyInput.handleTX11TextInput(event, lorieView, pendingText)) {
-            return true; // 事件已被处理（累积文本或发送了单个字符）
+        // 优先处理文本输入（ACTION_MULTIPLE 和 ACTION_DOWN 中的 Unicode 字符）
+        if (E02_KeyInput.handleTX11TextInput(event, lorieView)) {
+            return true;
         }
-        // 其他按键（功能键、ASCII 字符等）交给 KeyEventSender
+        // 其他按键交给 KeyEventSender
         return KeyEventSender.instance.sendKeyEvent(event, lorieView);
     }
 
@@ -196,7 +180,7 @@ public class MainActivity extends XServerDisplayActivity {
         instance = null;
     }
 
-    @Keep // used in native code
+    @Keep
     public static MainActivity getInstance() {
         return instance;
     }
