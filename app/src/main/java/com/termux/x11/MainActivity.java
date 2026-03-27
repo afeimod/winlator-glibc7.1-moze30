@@ -171,13 +171,11 @@ public class MainActivity extends XServerDisplayActivity {
 
     @Override
     protected boolean onXServerKeyboardKeyEvent(KeyEvent event) {
-        // 优先处理 ACTION_MULTIPLE 事件（输入法文本输入）
-        // 这解决了使用 TX11 替代 X Server 时无法输入中文的问题
-        if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
-            if (E02_KeyInput.handleTX11TextInput(event, lorieView)) {
-                return true;
-            }
+        // 优先处理文本输入事件（包括 ACTION_MULTIPLE 和 ACTION_DOWN 中的 Unicode 字符）
+        if (E02_KeyInput.handleTX11TextInput(event, lorieView)) {
+            return true;
         }
+        // 其他按键事件（如功能键）交给 KeyEventSender
         return KeyEventSender.instance.sendKeyEvent(event, lorieView);
     }
 
