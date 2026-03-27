@@ -55,6 +55,8 @@ public class E02_KeyInput {
      * 2. 但有时也可能通过普通的ACTION_DOWN事件+getUnicodeChar()发送字符
      * 3. Windows程序期待的是WM_CHAR消息，需要正确的UTF-8编码文本
      * 
+     * 修复：将 ACTION_MULTIPLE 的完整文本一次性发送，避免逐个字符发送导致的部分字符丢失
+     * 
      * @param event Android KeyEvent 事件
      * @param lorieView LorieView 实例用于发送文本事件
      * @return 是否已处理该事件
@@ -65,34 +67,25 @@ public class E02_KeyInput {
         // 处理 ACTION_MULTIPLE 事件（输入法发送多字符文本）
         if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
             if (characters == null || characters.isEmpty()) {
-                Log.d(TAG, "ACTION_MULTIPLE: characters is null or empty");
-                return false;
+                Log.d(TAG, "ACTION_MULTIPLE: characters is null or empty, ignoring");
+                return true; // 忽略空事件，避免传递给 sendKeyEvent
             }
 
             Log.d(TAG, "ACTION_MULTIPLE: received \"" + characters + "\", length=" + 
                   characters.length() + ", codepoints=" + characters.codePointCount(0, characters.length()));
 
-            // 遍历所有字符并发送文本事件
-            for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
-                int codePoint = characters.codePointAt(characters.offsetByCodePoints(0, i));
-                
-                // 将 codePoint 转换为字符
-                char[] chars = Character.toChars(codePoint);
-                String charStr = new String(chars);
-                
-                Log.d(TAG, "  Sending codepoint " + codePoint + " as \"" + charStr + "\"");
-                
-                // 发送文本事件
-                lorieView.sendTextEvent(charStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            }
+            // 一次性发送整个字符串，而不是逐个字符发送
+            byte[] utf8Bytes = characters.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            lorieView.sendTextEvent(utf8Bytes);
             return true;
         }
         
-        // 处理普通的 ACTION_DOWN 事件中的Unicode字符
+        // 处理普通的 ACTION_DOWN 事件中的 Unicode 字符
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            int unicodeChar = event.getUnicodeChar();
+            // 使用带 meta 状态的 getUnicodeChar 获取更准确的字符
+            int unicodeChar = event.getUnicodeChar(event.getMetaState());
             
-            // 只处理非ASCII字符（中文、日文等）
+            // 只处理非 ASCII 字符（中文、日文等）
             if (unicodeChar != 0 && unicodeChar > 0xFF) {
                 char[] chars = Character.toChars(unicodeChar);
                 String charStr = new String(chars);
@@ -100,7 +93,6 @@ public class E02_KeyInput {
                 Log.d(TAG, "ACTION_DOWN: unicodeChar=0x" + Integer.toHexString(unicodeChar) + 
                       " (\"" + charStr + "\")");
                 
-                // 发送文本事件
                 lorieView.sendTextEvent(charStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 return true;
             }
