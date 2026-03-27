@@ -1,4 +1,4 @@
-name: Proton 官方 ARM64 构建（基于 llvm-mingw，Debian 12 容器）
+name: Proton 官方 ARM64 构建（基于 llvm-mingw，Ubuntu 24.04 容器）
 
 on:
   schedule:
@@ -17,8 +17,8 @@ on:
         - bleeding-edge
 
 env:
-  LLVMMINGW_DATE: 20251202
-  LLVMMINGW_NAME: llvm-mingw-20251202-ucrt-ubuntu-22.04-x86_64
+  LLVMMINGW_DATE: 20260324
+  LLVMMINGW_NAME: llvm-mingw-20260324-ucrt-ubuntu-22.04-x86_64
   WINE64_DIR: /opt/wine64
   WINE_SOURCE_DIR: /opt/wine-src
   DEBIAN_FRONTEND: noninteractive
@@ -30,7 +30,7 @@ jobs:
   build-proton-wow64:
     runs-on: ubuntu-latest
     container:
-      image: debian:12
+      image: ubuntu:24.04
       options: --user root
     timeout-minutes: 180
 
@@ -44,16 +44,16 @@ jobs:
       - uses: actions/checkout@v4
 
       # ------------------------------------------------------------
-      # 1. 配置 APT 源（支持 amd64 和 arm64）
+      # 1. 配置 APT 源（支持 amd64 和 arm64，使用 Ubuntu 24.04 noble）
       # ------------------------------------------------------------
       - name: 配置 APT 源
         run: |
           if [ -f /etc/apt/sources.list ]; then
             cp /etc/apt/sources.list /etc/apt/sources.list.bak
           else
-            echo "deb http://deb.debian.org/debian bookworm main contrib non-free" > /etc/apt/sources.list
-            echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list
-            echo "deb http://security.debian.org/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list
+            echo "deb http://archive.ubuntu.com/ubuntu noble main universe multiverse restricted" > /etc/apt/sources.list
+            echo "deb http://archive.ubuntu.com/ubuntu noble-updates main universe multiverse restricted" >> /etc/apt/sources.list
+            echo "deb http://archive.ubuntu.com/ubuntu noble-security main universe multiverse restricted" >> /etc/apt/sources.list
           fi
 
           grep -v '^#' /etc/apt/sources.list | sed 's/^deb /deb [arch=amd64] /g' > /tmp/amd64.list
@@ -65,7 +65,7 @@ jobs:
           apt-get install -y --no-install-recommends hello:arm64 || { echo "arm64 源测试失败"; exit 1; }
 
       # ------------------------------------------------------------
-      # 2. 安装所有依赖（完全参照 Dockerfile 的包列表）
+      # 2. 安装所有依赖（参照 Dockerfile 的包列表，并增加 GStreamer 包）
       # ------------------------------------------------------------
       - name: 安装构建依赖
         run: |
@@ -111,7 +111,6 @@ jobs:
             libunwind-dev:arm64 \
             libgstreamer1.0-dev:arm64 \
             libgstreamer-plugins-base1.0-dev:arm64 \
-            libgstreamer-plugins-bad1.0-dev:arm64 \
             libudev-dev:arm64 \
             libunwind-dev:arm64 \
             libsdl2-dev:arm64 \
@@ -125,7 +124,11 @@ jobs:
             libxkbregistry-dev:arm64 \
             libmpg123-dev:arm64 \
             libopenal-dev:arm64 \
-            libwayland-dev:arm64
+            libwayland-dev:arm64 \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-ugly \
+            libgstreamer-plugins-good1.0-dev:arm64 \
+            libgstreamer-plugins-bad1.0-dev:arm64
 
       # ------------------------------------------------------------
       # 3. 安装 llvm-mingw 交叉编译工具链
@@ -207,23 +210,9 @@ jobs:
           rm fix-build_ffmpeg.patch
 
       # ------------------------------------------------------------
-      - name: 下载并应用 fix-wineboot-xstate.patch
-        run: |
-          
 
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "下载补丁：https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/fix-wineboot-xstate.patch"
-          wget -q -O fix-wineboot-xstate.patch https://raw.githubusercontent.com/afeimod/winlator-glibc7.1-moze30/old/paths/fix-wineboot-xstate.patch
-
-          echo "正在应用补丁 ..."
-          patch -p1 < fix-wineboot-xstate.patch
-
-          echo "补丁应用成功，清理临时文件"
-          rm fix-wineboot-xstate.patch
-      
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
-      
       - name: 生成 configure 脚本
         run: |
           cd ${{ env.WINE_SOURCE_DIR }}/source
@@ -301,8 +290,10 @@ jobs:
 
           export PATH="/opt/${{ env.LLVMMINGW_NAME }}/bin:$PATH"
           export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig
-          export CFLAGS="-O2 -pipe"
-          export CXXFLAGS="-O2 -pipe"
+          export CFLAGS="-O3 -pipe"
+          export CXXFLAGS="-O3 -pipe"
+          export CROSSCFLAGS="-O3 -pipe"
+          export CROSSCXXFLAGS="-O3 -pipe"
           # 根据 rules (4).txt 设置正确的 LDFLAGS，同时保留库搜索路径
           export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
           export WINE_NLS_DIR=/opt/wine64-native/nls
@@ -317,7 +308,34 @@ jobs:
             --enable-archs=arm64ec,aarch64,i386 \
             --enable-tools \
             --disable-tests \
+            --with-x \
             --with-vulkan \
+            --with-alsa \
+            --with-pulse \
+            --with-freetype \
+            --with-fontconfig \
+            --with-gstreamer \
+            --with-gettext \
+            --with-sdl \
+            --enable-nls \
+            --disable-win16 \
+            --disable-tests \
+            --without-ldap \
+            --without-capi \
+            --without-oss \
+            --without-cups \
+            --without-dbus \
+            --without-coreaudio \
+            --without-gphoto \
+            --without-osmesa \
+            --without-sane \
+            --without-pcap \
+            --without-pcsclite \
+            --without-udev \
+            --without-unwind \
+            --without-usb \
+            --without-v4l2 \
+            --without-wayland \
             --host=aarch64-linux-gnu \
             host_alias=aarch64-linux-gnu \
             build_alias=x86_64-linux-gnu \
