@@ -46,23 +46,23 @@ jobs:
       # ------------------------------------------------------------
       # 1. 配置 APT 源（支持 amd64 和 arm64，使用 Ubuntu 24.04 noble）
       # ------------------------------------------------------------
-      - name: 配置 APT 源
+      - name: 配置 APT 源（ARM64）
         run: |
-          if [ -f /etc/apt/sources.list ]; then
-            cp /etc/apt/sources.list /etc/apt/sources.list.bak
-          else
-            echo "deb http://archive.ubuntu.com/ubuntu noble main universe multiverse restricted" > /etc/apt/sources.list
-            echo "deb http://archive.ubuntu.com/ubuntu noble-updates main universe multiverse restricted" >> /etc/apt/sources.list
-            echo "deb http://archive.ubuntu.com/ubuntu noble-security main universe multiverse restricted" >> /etc/apt/sources.list
-          fi
-
-          grep -v '^#' /etc/apt/sources.list | sed 's/^deb /deb [arch=amd64] /g' > /tmp/amd64.list
-          sed -e 's/\[arch=amd64\]/[arch=arm64]/g' /tmp/amd64.list > /tmp/arm64.list
-          cat /tmp/amd64.list /tmp/arm64.list > /etc/apt/sources.list
-
-          dpkg --add-architecture arm64
-          apt-get update
-          apt-get install -y --no-install-recommends hello:arm64 || { echo "arm64 源测试失败"; exit 1; }
+            # 备份原配置
+            cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.bak 2>/dev/null || true
+    
+            # 写入新的源配置（以中科大为示例）
+            cat > /etc/apt/sources.list.d/ubuntu.sources << 'EOF'
+            Types: deb
+            URIs: http://mirrors.ustc.edu.cn/ubuntu-ports/
+            Suites: noble noble-updates noble-security
+            Components: main restricted universe multiverse
+            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+            EOF
+    
+            # 添加 arm64 架构并更新
+            dpkg --add-architecture arm64
+            apt-get update
 
       # ------------------------------------------------------------
       # 2. 安装所有依赖（参照 Dockerfile 的包列表，并增加 GStreamer 包）
