@@ -23,6 +23,7 @@ import com.winlator.widget.XServerView;
 import com.winlator.xenvironment.EnvironmentComponent;
 import com.winlator.xserverbridge.IXServerBridge;
 import com.winlator.xserverbridge.TX11XServerBridge;
+import com.ewt45.winlator.E02_KeyInput;
 
 // native 中固定包名类名获取 java 函数，所以这个类不能移动或重命名
 public class MainActivity extends XServerDisplayActivity {
