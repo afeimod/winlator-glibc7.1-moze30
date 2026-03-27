@@ -1,5 +1,7 @@
 package com.ewt45.winlator;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.KeyEvent;
 
@@ -21,13 +23,24 @@ public class E02_KeyInput {
     };
 
     private static final AtomicInteger currIndex = new AtomicInteger(0);
-    private static boolean warmedUp = false; // 预热标志
 
+    // TX11 文本累积相关
+    private static final StringBuilder pendingText = new StringBuilder();
+    private static final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private static final Runnable flushRunnable = () -> flushPendingText(null);
+    private static LorieView currentLorieView = null;
+
+    /**
+     * 处理默认 XServer 的 ACTION_MULTIPLE 事件（模拟按键方式输入）
+     * 此方法供 com.winlator.xserver.Keyboard 调用
+     */
     public static boolean handleAndroidKeyEvent(com.winlator.xserver.XServer xServer, KeyEvent event) {
         boolean handled = false;
         if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
             String characters = event.getCharacters();
-            if (characters == null) return false;
+            if (characters == null) {
+                return false;
+            }
             for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
                 int index = currIndex.getAndUpdate(curr -> (curr + 1) % stubKeyCode.length);
                 int keySym = characters.codePointAt(characters.offsetByCodePoints(0, i));
@@ -43,70 +56,82 @@ public class E02_KeyInput {
     }
 
     /**
+     * 发送累积的文本到 LorieView
+     */
+    private static void flushPendingText(LorieView lorieView) {
+        if (pendingText.length() == 0) return;
+        LorieView target = lorieView != null ? lorieView : currentLorieView;
+        if (target == null) {
+            Log.w(TAG, "flushPendingText: no LorieView available");
+            return;
+        }
+        String fullText = pendingText.toString();
+        Log.d(TAG, "Flushing pending text: \"" + fullText + "\" (length=" + fullText.length() + ")");
+        byte[] utf8Bytes = fullText.getBytes(StandardCharsets.UTF_8);
+        target.sendTextEvent(utf8Bytes);
+        pendingText.setLength(0);
+    }
+
+    /**
      * 处理 TX11 的文本输入事件
-     * 对于 ACTION_MULTIPLE，一次性发送整个字符串（不逐个字符发送）
-     * 对于 ACTION_DOWN 中的非 ASCII 字符，也一次性发送
-     * 增加预热机制：第一次发送前先发送一个零宽空格，确保底层初始化
+     * 将连续的 ACTION_MULTIPLE 合并，延迟 30ms 后一次性发送，避免分片丢失
+     *
+     * @param event     Android KeyEvent
+     * @param lorieView LorieView 实例
+     * @return true 表示事件已处理（消耗），false 表示未处理（需交由 KeyEventSender）
      */
     public static boolean handleTX11TextInput(KeyEvent event, LorieView lorieView) {
         if (lorieView == null) return false;
+        currentLorieView = lorieView; // 保存引用供延迟发送使用
 
-        // 处理 ACTION_MULTIPLE：一次性发送整个字符串
-        if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
+        int action = event.getAction();
+
+        // 处理 ACTION_MULTIPLE：累积文本，延迟发送
+        if (action == KeyEvent.ACTION_MULTIPLE) {
             String characters = event.getCharacters();
             if (characters == null || characters.isEmpty()) {
                 Log.d(TAG, "ACTION_MULTIPLE: empty, ignoring");
-                return true;
+                return true; // 消费空事件
             }
-            Log.d(TAG, "ACTION_MULTIPLE: sending \"" + characters + "\"");
-            sendTextWithWarmup(lorieView, characters);
+            pendingText.append(characters);
+            Log.d(TAG, "ACTION_MULTIPLE: appended \"" + characters + "\", pending length=" + pendingText.length());
+
+            // 取消之前的延迟任务，重新开始计时
+            uiHandler.removeCallbacks(flushRunnable);
+            uiHandler.postDelayed(flushRunnable, 30); // 30ms 延迟，平衡响应与合并
             return true;
         }
 
-        // 处理 ACTION_DOWN 中的单个 Unicode 字符（非 ASCII）
-        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+        // 非 ACTION_MULTIPLE 事件（如 ACTION_DOWN 中的单个字符）：先发送累积文本
+        if (pendingText.length() > 0) {
+            uiHandler.removeCallbacks(flushRunnable);
+            flushPendingText(lorieView);
+        }
+
+        // 处理 ACTION_DOWN 中的 Unicode 字符（非 ASCII）
+        if (action == KeyEvent.ACTION_DOWN) {
             int unicodeChar = event.getUnicodeChar(event.getMetaState());
             if (unicodeChar != 0 && unicodeChar > 0xFF) {
                 char[] chars = Character.toChars(unicodeChar);
                 String charStr = new String(chars);
                 Log.d(TAG, "ACTION_DOWN: sending single char \"" + charStr + "\"");
-                sendTextWithWarmup(lorieView, charStr);
+                lorieView.sendTextEvent(charStr.getBytes(StandardCharsets.UTF_8));
                 return true;
             }
         }
 
-        // 其他事件（ASCII 字符、功能键等）交给 KeyEventSender
-        return false;
+        return false; // 其他事件（ASCII、功能键等）交给 KeyEventSender
     }
 
     /**
-     * 发送文本前先进行预热（第一次发送时先发一个零宽空格）
-     */
-    private static void sendTextWithWarmup(LorieView lorieView, String text) {
-        if (!warmedUp) {
-            // 发送零宽空格，该字符在大多数应用中不可见，但能触发底层初始化
-            String warmupText = "\u200B"; // 零宽空格
-            byte[] warmupBytes = warmupText.getBytes(StandardCharsets.UTF_8);
-            lorieView.sendTextEvent(warmupBytes);
-            Log.d(TAG, "Warmup: sent zero-width space");
-            warmedUp = true;
-        }
-        // 发送实际文本
-        byte[] utf8Bytes = text.getBytes(StandardCharsets.UTF_8);
-        lorieView.sendTextEvent(utf8Bytes);
-    }
-
-    /**
-     * 供外部调用的预热方法（在连接成功后主动调用）
+     * 主动预热 LorieView 的文本输入通道（在连接成功后调用）
+     * 发送一个零宽空格，确保底层初始化
      */
     public static void warmup(LorieView lorieView) {
-        if (!warmedUp && lorieView != null) {
-            String warmupText = "\u200B";
-            byte[] warmupBytes = warmupText.getBytes(StandardCharsets.UTF_8);
-            lorieView.sendTextEvent(warmupBytes);
-            warmedUp = true;
-            Log.d(TAG, "External warmup: sent zero-width space");
-        }
+        if (lorieView == null) return;
+        Log.d(TAG, "Warmup: sending initial text to stabilize channel");
+        // 发送零宽空格（不可见字符），触发内部初始化
+        lorieView.sendTextEvent("\u200B".getBytes(StandardCharsets.UTF_8));
     }
 
     private static void sleep() {
