@@ -1,4 +1,5 @@
 package com.ewt45.winlator;
+import android.util.Log;
 import android.view.*;
 import com.winlator.xserver.*;
 import java.util.concurrent.atomic.*;
@@ -48,33 +49,64 @@ public class E02_KeyInput {
     /**
      * 处理 TX11 的文本输入事件
      * 解决使用 TX11 替代 X Server 时无法输入中文的问题
+     * 
+     * 问题分析：
+     * 1. Android输入法在选词时可能发送ACTION_MULTIPLE事件
+     * 2. 但有时也可能通过普通的ACTION_DOWN事件+getUnicodeChar()发送字符
+     * 3. Windows程序期待的是WM_CHAR消息，需要正确的UTF-8编码文本
+     * 
      * @param event Android KeyEvent 事件
      * @param lorieView LorieView 实例用于发送文本事件
      * @return 是否已处理该事件
      */
     public static boolean handleTX11TextInput(KeyEvent event, com.termux.x11.LorieView lorieView) {
-        if (event.getAction() != KeyEvent.ACTION_MULTIPLE) {
-            return false;
-        }
-
         String characters = event.getCharacters();
-        if (characters == null || characters.isEmpty()) {
-            return false;
-        }
+        
+        // 处理 ACTION_MULTIPLE 事件（输入法发送多字符文本）
+        if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
+            if (characters == null || characters.isEmpty()) {
+                Log.d(TAG, "ACTION_MULTIPLE: characters is null or empty");
+                return false;
+            }
 
-        // 遍历所有字符并发送文本事件
-        for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
-            int codePoint = characters.codePointAt(characters.offsetByCodePoints(0, i));
-            
-            // 将 codePoint 转换为字符
-            char[] chars = Character.toChars(codePoint);
-            String charStr = new String(chars);
-            
-            // 发送文本事件
-            lorieView.sendTextEvent(charStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        }
+            Log.d(TAG, "ACTION_MULTIPLE: received \"" + characters + "\", length=" + 
+                  characters.length() + ", codepoints=" + characters.codePointCount(0, characters.length()));
 
-        return true;
+            // 遍历所有字符并发送文本事件
+            for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
+                int codePoint = characters.codePointAt(characters.offsetByCodePoints(0, i));
+                
+                // 将 codePoint 转换为字符
+                char[] chars = Character.toChars(codePoint);
+                String charStr = new String(chars);
+                
+                Log.d(TAG, "  Sending codepoint " + codePoint + " as \"" + charStr + "\"");
+                
+                // 发送文本事件
+                lorieView.sendTextEvent(charStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            return true;
+        }
+        
+        // 处理普通的 ACTION_DOWN 事件中的Unicode字符
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int unicodeChar = event.getUnicodeChar();
+            
+            // 只处理非ASCII字符（中文、日文等）
+            if (unicodeChar != 0 && unicodeChar > 0xFF) {
+                char[] chars = Character.toChars(unicodeChar);
+                String charStr = new String(chars);
+                
+                Log.d(TAG, "ACTION_DOWN: unicodeChar=0x" + Integer.toHexString(unicodeChar) + 
+                      " (\"" + charStr + "\")");
+                
+                // 发送文本事件
+                lorieView.sendTextEvent(charStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     private static void sleep() {
