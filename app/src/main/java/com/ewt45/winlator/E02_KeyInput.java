@@ -21,6 +21,7 @@ public class E02_KeyInput {
     };
 
     private static final AtomicInteger currIndex = new AtomicInteger(0);
+    private static boolean warmedUp = false; // 预热标志
 
     public static boolean handleAndroidKeyEvent(com.winlator.xserver.XServer xServer, KeyEvent event) {
         boolean handled = false;
@@ -45,6 +46,7 @@ public class E02_KeyInput {
      * 处理 TX11 的文本输入事件
      * 对于 ACTION_MULTIPLE，一次性发送整个字符串（不逐个字符发送）
      * 对于 ACTION_DOWN 中的非 ASCII 字符，也一次性发送
+     * 增加预热机制：第一次发送前先发送一个零宽空格，确保底层初始化
      */
     public static boolean handleTX11TextInput(KeyEvent event, LorieView lorieView) {
         if (lorieView == null) return false;
@@ -54,12 +56,11 @@ public class E02_KeyInput {
             String characters = event.getCharacters();
             if (characters == null || characters.isEmpty()) {
                 Log.d(TAG, "ACTION_MULTIPLE: empty, ignoring");
-                return true; // 消费空事件
+                return true;
             }
             Log.d(TAG, "ACTION_MULTIPLE: sending \"" + characters + "\"");
-            byte[] utf8Bytes = characters.getBytes(StandardCharsets.UTF_8);
-            lorieView.sendTextEvent(utf8Bytes);
-            return true; // 消费事件
+            sendTextWithWarmup(lorieView, characters);
+            return true;
         }
 
         // 处理 ACTION_DOWN 中的单个 Unicode 字符（非 ASCII）
@@ -69,13 +70,43 @@ public class E02_KeyInput {
                 char[] chars = Character.toChars(unicodeChar);
                 String charStr = new String(chars);
                 Log.d(TAG, "ACTION_DOWN: sending single char \"" + charStr + "\"");
-                lorieView.sendTextEvent(charStr.getBytes(StandardCharsets.UTF_8));
+                sendTextWithWarmup(lorieView, charStr);
                 return true;
             }
         }
 
         // 其他事件（ASCII 字符、功能键等）交给 KeyEventSender
         return false;
+    }
+
+    /**
+     * 发送文本前先进行预热（第一次发送时先发一个零宽空格）
+     */
+    private static void sendTextWithWarmup(LorieView lorieView, String text) {
+        if (!warmedUp) {
+            // 发送零宽空格，该字符在大多数应用中不可见，但能触发底层初始化
+            String warmupText = "\u200B"; // 零宽空格
+            byte[] warmupBytes = warmupText.getBytes(StandardCharsets.UTF_8);
+            lorieView.sendTextEvent(warmupBytes);
+            Log.d(TAG, "Warmup: sent zero-width space");
+            warmedUp = true;
+        }
+        // 发送实际文本
+        byte[] utf8Bytes = text.getBytes(StandardCharsets.UTF_8);
+        lorieView.sendTextEvent(utf8Bytes);
+    }
+
+    /**
+     * 供外部调用的预热方法（在连接成功后主动调用）
+     */
+    public static void warmup(LorieView lorieView) {
+        if (!warmedUp && lorieView != null) {
+            String warmupText = "\u200B";
+            byte[] warmupBytes = warmupText.getBytes(StandardCharsets.UTF_8);
+            lorieView.sendTextEvent(warmupBytes);
+            warmedUp = true;
+            Log.d(TAG, "External warmup: sent zero-width space");
+        }
     }
 
     private static void sleep() {
