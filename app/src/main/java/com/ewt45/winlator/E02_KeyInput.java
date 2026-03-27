@@ -18,33 +18,64 @@ public class E02_KeyInput {
     private static final AtomicInteger currIndex = new AtomicInteger(0);
 
     public static boolean handleAndroidKeyEvent(XServer xServer, KeyEvent event) {
-    boolean handled = false;
-    if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
-        String characters = event.getCharacters();
-        
-        // 添加空值检查
-        if (characters == null) {
+        boolean handled = false;
+        if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
+            String characters = event.getCharacters();
+            
+            // 添加空值检查
+            if (characters == null) {
+                return false;
+            }
+            
+            for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
+                // 原子性地获取并增加索引
+                int index = currIndex.getAndUpdate(curr -> (curr + 1) % stubKeyCode.length);
+                int keycode = stubKeyCode[index].id;
+                int keySym = characters.codePointAt(characters.offsetByCodePoints(0, i));
+
+                if (keySym > 0xff) keySym = keySym | 0x1000000;
+
+                xServer.injectKeyPress(stubKeyCode[index], keySym);
+                sleep();
+                xServer.injectKeyRelease(stubKeyCode[index]);                
+                sleep();
+                handled = true;
+            }
+        }
+        return handled;
+    }
+
+    /**
+     * 处理 TX11 的文本输入事件
+     * 解决使用 TX11 替代 X Server 时无法输入中文的问题
+     * @param event Android KeyEvent 事件
+     * @param lorieView LorieView 实例用于发送文本事件
+     * @return 是否已处理该事件
+     */
+    public static boolean handleTX11TextInput(KeyEvent event, com.termux.x11.LorieView lorieView) {
+        if (event.getAction() != KeyEvent.ACTION_MULTIPLE) {
             return false;
         }
-        
-        for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
-            // 原子性地获取并增加索引
-            int index = currIndex.getAndUpdate(curr -> (curr + 1) % stubKeyCode.length);
-            int keycode = stubKeyCode[index].id;
-            int keySym = characters.codePointAt(characters.offsetByCodePoints(0, i));
 
-            if (keySym > 0xff) keySym = keySym | 0x1000000;
-
-            xServer.injectKeyPress(stubKeyCode[index], keySym);
-            sleep();
-            xServer.injectKeyRelease(stubKeyCode[index]);                
-            sleep();
-            handled = true;
+        String characters = event.getCharacters();
+        if (characters == null || characters.isEmpty()) {
+            return false;
         }
-    }
-    return handled;
-}
 
+        // 遍历所有字符并发送文本事件
+        for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
+            int codePoint = characters.codePointAt(characters.offsetByCodePoints(0, i));
+            
+            // 将 codePoint 转换为字符
+            char[] chars = Character.toChars(codePoint);
+            String charStr = new String(chars);
+            
+            // 发送文本事件
+            lorieView.sendTextEvent(charStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+
+        return true;
+    }
 
     private static void sleep() {
         try {
