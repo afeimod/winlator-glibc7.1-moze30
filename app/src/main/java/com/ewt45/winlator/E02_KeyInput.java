@@ -1,20 +1,13 @@
 package com.ewt45.winlator;
-
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
-import android.view.KeyEvent;
-
-import com.winlator.xserver.XKeycode;
-import com.termux.x11.LorieView;
-
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicInteger;
+import android.view.*;
+import com.winlator.xserver.*;
+import java.util.concurrent.atomic.*;
 
 public class E02_KeyInput {
     private static final String TAG = "E2_KeyInput";
     public static final XKeycode[] stubKeyCode = {
-        XKeycode.KEY_CUSTOM_1, XKeycode.KEY_CUSTOM_2, XKeycode.KEY_CUSTOM_3,
+        XKeycode.KEY_CUSTOM_1, XKeycode.KEY_CUSTOM_2, XKeycode.KEY_CUSTOM_3, 
         XKeycode.KEY_CUSTOM_4, XKeycode.KEY_CUSTOM_5, XKeycode.KEY_CUSTOM_6,
         XKeycode.KEY_CUSTOM_7, XKeycode.KEY_CUSTOM_8, XKeycode.KEY_CUSTOM_9,
         XKeycode.KEY_CUSTOM_10, XKeycode.KEY_CUSTOM_11, XKeycode.KEY_CUSTOM_12,
@@ -22,32 +15,30 @@ public class E02_KeyInput {
         XKeycode.KEY_CUSTOM_16, XKeycode.KEY_CUSTOM_17
     };
 
+    // 使用 AtomicInteger 替代普通的 int
     private static final AtomicInteger currIndex = new AtomicInteger(0);
 
-    // TX11 文本累积相关
-    private static final StringBuilder pendingText = new StringBuilder();
-    private static final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private static final Runnable flushRunnable = () -> flushPendingText(null);
-    private static LorieView currentLorieView = null;
-
-    /**
-     * 处理默认 XServer 的 ACTION_MULTIPLE 事件（模拟按键方式输入）
-     * 此方法供 com.winlator.xserver.Keyboard 调用
-     */
-    public static boolean handleAndroidKeyEvent(com.winlator.xserver.XServer xServer, KeyEvent event) {
+    public static boolean handleAndroidKeyEvent(XServer xServer, KeyEvent event) {
         boolean handled = false;
         if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
             String characters = event.getCharacters();
+            
+            // 添加空值检查
             if (characters == null) {
                 return false;
             }
+            
             for (int i = 0; i < characters.codePointCount(0, characters.length()); i++) {
+                // 原子性地获取并增加索引
                 int index = currIndex.getAndUpdate(curr -> (curr + 1) % stubKeyCode.length);
+                int keycode = stubKeyCode[index].id;
                 int keySym = characters.codePointAt(characters.offsetByCodePoints(0, i));
+
                 if (keySym > 0xff) keySym = keySym | 0x1000000;
+
                 xServer.injectKeyPress(stubKeyCode[index], keySym);
                 sleep();
-                xServer.injectKeyRelease(stubKeyCode[index]);
+                xServer.injectKeyRelease(stubKeyCode[index]);                
                 sleep();
                 handled = true;
             }
@@ -56,82 +47,58 @@ public class E02_KeyInput {
     }
 
     /**
-     * 发送累积的文本到 LorieView
-     */
-    private static void flushPendingText(LorieView lorieView) {
-        if (pendingText.length() == 0) return;
-        LorieView target = lorieView != null ? lorieView : currentLorieView;
-        if (target == null) {
-            Log.w(TAG, "flushPendingText: no LorieView available");
-            return;
-        }
-        String fullText = pendingText.toString();
-        Log.d(TAG, "Flushing pending text: \"" + fullText + "\" (length=" + fullText.length() + ")");
-        byte[] utf8Bytes = fullText.getBytes(StandardCharsets.UTF_8);
-        target.sendTextEvent(utf8Bytes);
-        pendingText.setLength(0);
-    }
-
-    /**
      * 处理 TX11 的文本输入事件
-     * 将连续的 ACTION_MULTIPLE 合并，延迟 30ms 后一次性发送，避免分片丢失
-     *
-     * @param event     Android KeyEvent
-     * @param lorieView LorieView 实例
-     * @return true 表示事件已处理（消耗），false 表示未处理（需交由 KeyEventSender）
+     * 解决使用 TX11 替代 X Server 时无法输入中文的问题
+     * 
+     * 问题分析：
+     * 1. Android输入法在选词时可能发送ACTION_MULTIPLE事件
+     * 2. 但有时也可能通过普通的ACTION_DOWN事件+getUnicodeChar()发送字符
+     * 3. Windows程序期待的是WM_CHAR消息，需要正确的UTF-8编码文本
+     * 
+     * 修复：将 ACTION_MULTIPLE 的完整文本一次性发送，避免逐个字符发送导致的部分字符丢失
+     * 
+     * @param event Android KeyEvent 事件
+     * @param lorieView LorieView 实例用于发送文本事件
+     * @return 是否已处理该事件
      */
-    public static boolean handleTX11TextInput(KeyEvent event, LorieView lorieView) {
-        if (lorieView == null) return false;
-        currentLorieView = lorieView; // 保存引用供延迟发送使用
-
-        int action = event.getAction();
-
-        // 处理 ACTION_MULTIPLE：累积文本，延迟发送
-        if (action == KeyEvent.ACTION_MULTIPLE) {
-            String characters = event.getCharacters();
+    public static boolean handleTX11TextInput(KeyEvent event, com.termux.x11.LorieView lorieView) {
+        String characters = event.getCharacters();
+        
+        // 处理 ACTION_MULTIPLE 事件（输入法发送多字符文本）
+        if (event.getAction() == KeyEvent.ACTION_MULTIPLE) {
             if (characters == null || characters.isEmpty()) {
-                Log.d(TAG, "ACTION_MULTIPLE: empty, ignoring");
-                return true; // 消费空事件
+                Log.d(TAG, "ACTION_MULTIPLE: characters is null or empty, ignoring");
+                return true; // 忽略空事件，避免传递给 sendKeyEvent
             }
-            pendingText.append(characters);
-            Log.d(TAG, "ACTION_MULTIPLE: appended \"" + characters + "\", pending length=" + pendingText.length());
 
-            // 取消之前的延迟任务，重新开始计时
-            uiHandler.removeCallbacks(flushRunnable);
-            uiHandler.postDelayed(flushRunnable, 30); // 30ms 延迟，平衡响应与合并
+            Log.d(TAG, "ACTION_MULTIPLE: received \"" + characters + "\", length=" + 
+                  characters.length() + ", codepoints=" + characters.codePointCount(0, characters.length()));
+
+            // 一次性发送整个字符串，而不是逐个字符发送
+            byte[] utf8Bytes = characters.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            lorieView.sendTextEvent(utf8Bytes);
             return true;
         }
-
-        // 非 ACTION_MULTIPLE 事件（如 ACTION_DOWN 中的单个字符）：先发送累积文本
-        if (pendingText.length() > 0) {
-            uiHandler.removeCallbacks(flushRunnable);
-            flushPendingText(lorieView);
-        }
-
-        // 处理 ACTION_DOWN 中的 Unicode 字符（非 ASCII）
-        if (action == KeyEvent.ACTION_DOWN) {
+        
+        // 处理普通的 ACTION_DOWN 事件中的 Unicode 字符
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            // 使用带 meta 状态的 getUnicodeChar 获取更准确的字符
             int unicodeChar = event.getUnicodeChar(event.getMetaState());
+            
+            // 只处理非 ASCII 字符（中文、日文等）
             if (unicodeChar != 0 && unicodeChar > 0xFF) {
                 char[] chars = Character.toChars(unicodeChar);
                 String charStr = new String(chars);
-                Log.d(TAG, "ACTION_DOWN: sending single char \"" + charStr + "\"");
-                lorieView.sendTextEvent(charStr.getBytes(StandardCharsets.UTF_8));
+                
+                Log.d(TAG, "ACTION_DOWN: unicodeChar=0x" + Integer.toHexString(unicodeChar) + 
+                      " (\"" + charStr + "\")");
+                
+                lorieView.sendTextEvent(charStr.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 return true;
             }
         }
-
-        return false; // 其他事件（ASCII、功能键等）交给 KeyEventSender
-    }
-
-    /**
-     * 主动预热 LorieView 的文本输入通道（在连接成功后调用）
-     * 发送一个零宽空格，确保底层初始化
-     */
-    public static void warmup(LorieView lorieView) {
-        if (lorieView == null) return;
-        Log.d(TAG, "Warmup: sending initial text to stabilize channel");
-        // 发送零宽空格（不可见字符），触发内部初始化
-        lorieView.sendTextEvent("\u200B".getBytes(StandardCharsets.UTF_8));
+        
+        return false;
     }
 
     private static void sleep() {
