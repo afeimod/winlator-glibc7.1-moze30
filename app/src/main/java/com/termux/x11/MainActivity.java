@@ -129,7 +129,7 @@ public class MainActivity extends XServerDisplayActivity {
                 tryConnect();
             else {
                 getLorieView().setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_NULL));
-                // 连接成功后主动预热，避免第一次输入延迟
+                // 连接成功后预热文本通道，解决初期输入丢失
                 E02_KeyInput.warmup(lorieView);
             }
 
@@ -160,11 +160,11 @@ public class MainActivity extends XServerDisplayActivity {
 
     @Override
     protected boolean onXServerKeyboardKeyEvent(KeyEvent event) {
-        // 优先处理文本输入（ACTION_MULTIPLE 和 ACTION_DOWN 中的 Unicode 字符）
+        // 优先处理中文输入（ACTION_MULTIPLE 和 Unicode 字符）
         if (E02_KeyInput.handleTX11TextInput(event, lorieView)) {
             return true;
         }
-        // 其他按键交给 KeyEventSender
+        // 其他按键（功能键、ASCII 字符等）交给 KeyEventSender
         return KeyEventSender.instance.sendKeyEvent(event, lorieView);
     }
 
