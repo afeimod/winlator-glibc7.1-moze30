@@ -127,8 +127,11 @@ public class MainActivity extends XServerDisplayActivity {
 
             if (!connected)
                 tryConnect();
-            else
+            else {
                 getLorieView().setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_NULL));
+                // 连接成功后主动预热，避免第一次输入延迟
+                E02_KeyInput.warmup(lorieView);
+            }
 
             onWindowFocusChanged(hasWindowFocus());
         });
