@@ -25,12 +25,14 @@ import com.winlator.xserverbridge.IXServerBridge;
 import com.winlator.xserverbridge.TX11XServerBridge;
 import com.ewt45.winlator.E02_KeyInput;
 
-// native 中固定包名类名获取 java 函数，所以这个类不能移动或重命名
 public class MainActivity extends XServerDisplayActivity {
     private static final String TAG = "Tx11MainActivity";
     private static MainActivity instance = null;
     private LorieView lorieView = null;
     protected ICmdEntryInterface service = null;
+
+    // 用于累积中文输入法的 ACTION_MULTIPLE 片段
+    private final StringBuilder pendingText = new StringBuilder();
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -171,11 +173,11 @@ public class MainActivity extends XServerDisplayActivity {
 
     @Override
     protected boolean onXServerKeyboardKeyEvent(KeyEvent event) {
-        // 优先处理文本输入事件（包括 ACTION_MULTIPLE 和 ACTION_DOWN 中的 Unicode 字符）
-        if (E02_KeyInput.handleTX11TextInput(event, lorieView)) {
-            return true;
+        // 将 pendingText 传递给 E02_KeyInput 用于累积
+        if (E02_KeyInput.handleTX11TextInput(event, lorieView, pendingText)) {
+            return true; // 事件已被处理（累积文本或发送了单个字符）
         }
-        // 其他按键事件（如功能键）交给 KeyEventSender
+        // 其他按键（功能键、ASCII 字符等）交给 KeyEventSender
         return KeyEventSender.instance.sendKeyEvent(event, lorieView);
     }
 
