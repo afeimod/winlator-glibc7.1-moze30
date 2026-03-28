@@ -46,26 +46,23 @@ jobs:
       # ------------------------------------------------------------
       # 1. 配置 APT 源（支持 amd64 和 arm64，使用 Ubuntu 24.04 noble）
       # ------------------------------------------------------------
-      - name: 配置 APT 源（ARM64 + amd64）
+      - name: 配置 APT 源
         run: |
-            cat > /etc/apt/sources.list.d/ubuntu.sources << 'EOF'
-            Types: deb
-            URIs: http://archive.ubuntu.com/ubuntu/
-            Suites: noble noble-updates noble-backports
-            Components: main universe restricted multiverse
-            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-            Architectures: amd64
+          if [ -f /etc/apt/sources.list ]; then
+            cp /etc/apt/sources.list /etc/apt/sources.list.bak
+          else
+            echo "deb http://deb.debian.org/debian bookworm main contrib non-free" > /etc/apt/sources.list
+            echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list
+            echo "deb http://security.debian.org/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list
+          fi
 
-            Types: deb
-            URIs: http://ports.ubuntu.com/ubuntu-ports/
-            Suites: noble noble-updates noble-backports
-            Components: main universe restricted multiverse
-            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-            Architectures: arm64
-            EOF
+          grep -v '^#' /etc/apt/sources.list | sed 's/^deb /deb [arch=amd64] /g' > /tmp/amd64.list
+          sed -e 's/\[arch=amd64\]/[arch=arm64]/g' /tmp/amd64.list > /tmp/arm64.list
+          cat /tmp/amd64.list /tmp/arm64.list > /etc/apt/sources.list
 
-            dpkg --add-architecture arm64
-            apt-get update
+          dpkg --add-architecture arm64
+          apt-get update
+          apt-get install -y --no-install-recommends hello:arm64 || { echo "arm64 源测试失败"; exit 1; }
 
       # ------------------------------------------------------------
       # 2. 安装所有依赖（包含 GStreamer 等）
