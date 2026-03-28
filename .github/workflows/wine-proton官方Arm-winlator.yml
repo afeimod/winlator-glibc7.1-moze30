@@ -292,22 +292,19 @@ jobs:
 
       # ------------------------------------------------------------
       # 11. 交叉编译 ARM64 WOW64
-      #     修复 atiadlxx 的类型不匹配错误（保留该模块）
+      #     修复 atiadlxx 类型错误（保留该模块）
       # ------------------------------------------------------------
       - name: 交叉编译 ARM64 WOW64
         run: |
           cd ${{ env.WINE_SOURCE_DIR }}/source
 
-          # 创建并应用修复 atiadlxx 的补丁
-          wget -q https://github.com/afeimod/linbox/raw/main/path/fix-atiadlxx.patch
-
-          echo "应用补丁..."
-          patch -p1 < fix-atiadlxx.patch
-          if [ $? -eq 0 ]; then
-            echo "✓ atiadlxx 补丁应用成功"
+          # 修复 atiadlxx_main.c 中的类型错误
+          echo "修复 atiadlxx 类型错误..."
+          if grep -q "InterlockedOr(&dummy, 0);" dlls/atiadlxx/atiadlxx_main.c; then
+              sed -i 's/InterlockedOr(&dummy, 0);/InterlockedOr((volatile long *)&dummy, 0);/' dlls/atiadlxx/atiadlxx_main.c
+              echo "✓ 已修复 InterlockedOr 调用"
           else
-            echo "❌ 补丁应用失败"
-            exit 1
+              echo "⚠ 未找到 InterlockedOr(&dummy, 0);，可能无需修复"
           fi
 
           mkdir -p build-arm64
