@@ -30,7 +30,7 @@ jobs:
   build-proton-wow64:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:24.04
+      image: debian:12
       options: --user root
     timeout-minutes: 180
 
