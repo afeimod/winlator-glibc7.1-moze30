@@ -1,4 +1,4 @@
-name: Proton 官方 ARM64 构建（基于 llvm-mingw，Ubuntu 24.04 容器）
+name: Proton 官方 ARM64 构建（基于 llvm-mingw，debian 12 容器）
 
 on:
   schedule:
@@ -119,7 +119,6 @@ jobs:
             libgstreamer-plugins-bad1.0-dev:arm64 \
             gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-ugly \
-            libgstreamer-plugins-good1.0-dev:arm64 \
             libgstreamer-plugins-bad1.0-dev:arm64 \
             libudev-dev:arm64 \
             libunwind-dev:arm64 \
