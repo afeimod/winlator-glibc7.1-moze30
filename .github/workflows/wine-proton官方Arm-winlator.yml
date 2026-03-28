@@ -298,14 +298,16 @@ jobs:
         run: |
           cd ${{ env.WINE_SOURCE_DIR }}/source
 
-          # 修复 atiadlxx 模块中的类型不匹配错误（在 configure 之前）
-          echo "修复 atiadlxx_main.c 中的类型不匹配..."
-          sed -i 's/InterlockedOr(&dummy, 0);/InterlockedOr((volatile long*)&dummy, 0);/' dlls/atiadlxx/atiadlxx_main.c
-          # 验证修改是否成功
-          if grep -q 'InterlockedOr((volatile long*)&dummy, 0);' dlls/atiadlxx/atiadlxx_main.c; then
-            echo "✓ atiadlxx_main.c 修复成功"
+          # 创建并应用修复 atiadlxx 的补丁
+          wget -q https://github.com/afeimod/linbox/raw/main/path/fix-atiadlxx.patch
+
+          echo "应用补丁..."
+          patch -p1 < fix-atiadlxx.patch
+          if [ $? -eq 0 ]; then
+            echo "✓ atiadlxx 补丁应用成功"
           else
-            echo "⚠ 警告: 未找到修复后的行，请检查源文件"
+            echo "❌ 补丁应用失败"
+            exit 1
           fi
 
           mkdir -p build-arm64
