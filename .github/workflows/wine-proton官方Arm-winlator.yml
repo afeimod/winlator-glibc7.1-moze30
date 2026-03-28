@@ -205,36 +205,7 @@ jobs:
       # ------------------------------------------------------------
       # 7. 应用来自 wine-termux 的 ffmpeg 构建补丁
       # ------------------------------------------------------------
-      - name: 下载并应用 fix-build_ffmpeg.patch
-        run: |
-          set -e
-          # 确保 patch 命令可用
-          apt-get update && apt-get install -y --no-install-recommends patch
 
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "下载补丁：https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch"
-          wget -q -O fix-build_ffmpeg.patch https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch
-
-          echo "正在应用补丁 ..."
-          patch -p1 < fix-build_ffmpeg.patch
-
-          echo "补丁应用成功，清理临时文件"
-          rm fix-build_ffmpeg.patch
-
-      # ------------------------------------------------------------
-      # 8. 修复 atiadlxx 编译错误（在 ffmpeg 补丁之后）
-      # ------------------------------------------------------------
-      - name: 修复 atiadlxx 类型错误
-        run: |
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          # 检查文件是否存在 InterlockedOr(&dummy, 0); 并修复
-          if grep -q "InterlockedOr(&dummy, 0);" dlls/atiadlxx/atiadlxx_main.c; then
-            echo "找到 InterlockedOr(&dummy, 0); 正在修复..."
-            sed -i 's/InterlockedOr(&dummy, 0);/InterlockedOr((volatile long *)&dummy, 0);/' dlls/atiadlxx/atiadlxx_main.c
-            echo "✓ 修复完成"
-          else
-            echo "⚠ 未找到需要修复的行，跳过"
-          fi
 
       # ------------------------------------------------------------
       # 9. 生成 configure 脚本
