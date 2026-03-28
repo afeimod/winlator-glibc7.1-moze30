@@ -292,13 +292,11 @@ jobs:
 
       # ------------------------------------------------------------
       # 11. 交叉编译 ARM64 WOW64
-      #     修改：在 configure 之前删除有问题的 atiadlxx 模块，避免编译错误
+      #     修复 atiadlxx 的类型不匹配错误（保留该模块）
       # ------------------------------------------------------------
       - name: 交叉编译 ARM64 WOW64
         run: |
           cd ${{ env.WINE_SOURCE_DIR }}/source
-          # 在 configure 之前删除有问题的 atiadlxx 模块
-          rm -rf dlls/atiadlxx
           mkdir -p build-arm64
           cd build-arm64
 
@@ -353,6 +351,9 @@ jobs:
             build_alias=x86_64-linux-gnu \
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
+
+          # 修复 atiadlxx 模块中的类型不匹配错误
+          sed -i 's/InterlockedOr(&dummy, 0);/InterlockedOr((volatile long*)&dummy, 0);/' ../dlls/atiadlxx/atiadlxx_main.c
 
           # 使用静默模式编译，同时将完整日志保存到文件（便于调试）
           make -s -j$(nproc) 2>&1 | tee build_cross.log
