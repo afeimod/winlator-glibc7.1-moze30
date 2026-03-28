@@ -211,7 +211,22 @@ jobs:
               s/InterlockedOr(&dummy, 0);/__sync_synchronize();/
           }' include/winnt.h
           echo "MemoryBarrier 已修补为 __sync_synchronize()"
+          
+      - name: 下载并应用 fix-build_ffmpeg.patch
+        run: |
+          set -e
+          # 确保 patch 命令可用
+          apt-get update && apt-get install -y --no-install-recommends patch
 
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          echo "下载补丁：https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch"
+          wget -q -O fix-build_ffmpeg.patch https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch
+
+          echo "正在应用补丁 ..."
+          patch -p1 < fix-build_ffmpeg.patch
+
+          echo "补丁应用成功，清理临时文件"
+          rm fix-build_ffmpeg.patch
       # ------------------------------------------------------------
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
