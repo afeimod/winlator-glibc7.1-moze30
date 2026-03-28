@@ -228,7 +228,6 @@ jobs:
           echo "补丁应用成功，清理临时文件"
           rm fix-build_ffmpeg.patch
       # ------------------------------------------------------------
-            # ------------------------------------------------------------
       # 7.5. 修补 wineboot.c 以支持 ARM64
       # ------------------------------------------------------------
       - name: 修补 wineboot.c 以跳过 ARM64 上的 initialize_xstate_features 调用
@@ -308,7 +307,7 @@ jobs:
           echo "复制后 locale.nls 存在，大小: $(wc -c < /opt/wine64-native/nls/locale.nls) 字节"
 
       # ------------------------------------------------------------
-      # 11. 交叉编译 ARM64 WOW64（不使用 -U_MSC_VER，保留 _MSC_VER）
+      # 11. 交叉编译 ARM64 WOW64（使用 bash 执行）
       # ------------------------------------------------------------
       - name: 交叉编译 ARM64 WOW64
         run: |
@@ -368,8 +367,10 @@ jobs:
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
 
+          # 使用 set -o pipefail 确保 tee 不掩盖 make 错误
+          set -o pipefail
           make -s -j$(nproc) 2>&1 | tee build_cross.log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+          if [ $? -ne 0 ]; then
               echo "❌ 编译失败，最后200行日志："
               tail -n 200 build_cross.log
               exit 1
@@ -381,13 +382,14 @@ jobs:
             echo "错误: /tmp/wine-install-wow64/bin 目录不存在，安装可能不完整"
             exit 1
           fi
+        shell: bash  # 显式指定使用 bash
 
       # ------------------------------------------------------------
-      # 12. 补全安装目录的运行时文件（增强版）
+      # 12. 全面补全安装目录的运行时文件（增强版，使用 bash）
       # ------------------------------------------------------------
       - name: 全面补全安装目录的运行时文件（增强版）
         run: |
-          set -e
+          set -ex  # 开启调试，便于排查
           TARGET_PREFIX="/tmp/wine-install-wow64"
           BUILD_DIR="${{ env.WINE_SOURCE_DIR }}/source/build-arm64"
           SOURCE_DIR="${{ env.WINE_SOURCE_DIR }}/source"
@@ -406,7 +408,10 @@ jobs:
           echo "=== 补全 share/wine/fonts ==="
           if [ -d "$SOURCE_FONTS_DIR" ]; then
               mkdir -p "$TARGET_PREFIX/share/wine/fonts"
-              cp -v "$SOURCE_FONTS_DIR"/*.ttf "$SOURCE_FONTS_DIR"/*.fon "$TARGET_PREFIX/share/wine/fonts/" 2>/dev/null || echo "字体复制完成或无字体文件"
+              # 使用循环避免通配符无匹配时出错
+              for font in "$SOURCE_FONTS_DIR"/*.ttf "$SOURCE_FONTS_DIR"/*.fon; do
+                  [ -e "$font" ] && cp -v "$font" "$TARGET_PREFIX/share/wine/fonts/"
+              done || echo "字体复制完成或无字体文件"
           else
               echo "警告: 源码 fonts 目录不存在，跳过字体复制"
           fi
@@ -438,7 +443,7 @@ jobs:
                   continue
               fi
               found=""
-              if [[ "$prog" != "wine" && "$prog" != "wineserver" ]]; then
+              if [ "$prog" != "wine" ] && [ "$prog" != "wineserver" ]; then
                   found=$(find "$BUILD_DIR/programs" -type f -name "$prog" -executable 2>/dev/null | head -1)
               fi
               if [ -z "$found" ]; then
@@ -466,6 +471,7 @@ jobs:
           echo "=== 最终安装目录结构预览 ==="
           ls -la "$TARGET_PREFIX/share/wine/" || true
           ls -la "$TARGET_PREFIX/bin/" || true
+        shell: bash
 
       # ------------------------------------------------------------
       # 13. 验证安装目录内容
