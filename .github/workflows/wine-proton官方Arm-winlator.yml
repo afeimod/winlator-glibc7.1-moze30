@@ -332,10 +332,9 @@ jobs:
             --with-sdl \
             --enable-nls \
             --disable-win16 \
-            --disable-tests \
-            --without-ldap \
             --without-capi \
             --without-oss \
+            --without-atiadlxx \
             --without-cups \
             --without-dbus \
             --without-coreaudio \
