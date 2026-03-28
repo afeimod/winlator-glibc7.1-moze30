@@ -222,8 +222,22 @@ jobs:
           rm fix-build_ffmpeg.patch
 
       # ------------------------------------------------------------
+      # 8. 修复 atiadlxx 编译错误（在 ffmpeg 补丁之后）
+      # ------------------------------------------------------------
+      - name: 修复 atiadlxx 类型错误
+        run: |
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          # 检查文件是否存在 InterlockedOr(&dummy, 0); 并修复
+          if grep -q "InterlockedOr(&dummy, 0);" dlls/atiadlxx/atiadlxx_main.c; then
+            echo "找到 InterlockedOr(&dummy, 0); 正在修复..."
+            sed -i 's/InterlockedOr(&dummy, 0);/InterlockedOr((volatile long *)&dummy, 0);/' dlls/atiadlxx/atiadlxx_main.c
+            echo "✓ 修复完成"
+          else
+            echo "⚠ 未找到需要修复的行，跳过"
+          fi
 
-      # 8. 生成 configure 脚本
+      # ------------------------------------------------------------
+      # 9. 生成 configure 脚本
       # ------------------------------------------------------------
       - name: 生成 configure 脚本
         run: |
@@ -233,7 +247,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 9. 构建 native wine64 工具和 NLS（带完整备份）
+      # 10. 构建 native wine64 工具和 NLS（带完整备份）
       # ------------------------------------------------------------
       - name: 构建 native wine64 工具和 NLS（带完整备份）
         run: |
@@ -254,7 +268,7 @@ jobs:
           ls -la /opt/nls-backup/
 
       # ------------------------------------------------------------
-      # 10. 复制构建目录，跟随符号链接，并验证 NLS（带恢复机制）
+      # 11. 复制构建目录，跟随符号链接，并验证 NLS（带恢复机制）
       # ------------------------------------------------------------
       - name: 复制构建目录并验证 NLS（带恢复机制）
         run: |
@@ -291,22 +305,11 @@ jobs:
           echo "复制后 locale.nls 存在，大小: $(wc -c < /opt/wine64-native/nls/locale.nls) 字节"
 
       # ------------------------------------------------------------
-      # 11. 交叉编译 ARM64 WOW64
-      #     修复 atiadlxx 类型错误（保留该模块）
+      # 12. 交叉编译 ARM64 WOW64
       # ------------------------------------------------------------
       - name: 交叉编译 ARM64 WOW64
         run: |
           cd ${{ env.WINE_SOURCE_DIR }}/source
-
-          # 修复 atiadlxx_main.c 中的类型错误
-          echo "修复 atiadlxx 类型错误..."
-          if grep -q "InterlockedOr(&dummy, 0);" dlls/atiadlxx/atiadlxx_main.c; then
-              sed -i 's/InterlockedOr(&dummy, 0);/InterlockedOr((volatile long *)&dummy, 0);/' dlls/atiadlxx/atiadlxx_main.c
-              echo "✓ 已修复 InterlockedOr 调用"
-          else
-              echo "⚠ 未找到 InterlockedOr(&dummy, 0);，可能无需修复"
-          fi
-
           mkdir -p build-arm64
           cd build-arm64
 
@@ -379,7 +382,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 12. 全面补全安装目录的运行时文件（增强版：优先从 programs/ 查找）
+      # 13. 全面补全安装目录的运行时文件（增强版：优先从 programs/ 查找）
       # ------------------------------------------------------------
       - name: 全面补全安装目录的运行时文件（增强版）
         run: |
@@ -469,7 +472,7 @@ jobs:
           ls -la "$TARGET_PREFIX/bin/" || true
 
       # ------------------------------------------------------------
-      # 13. 验证安装目录内容（可选，便于调试）
+      # 14. 验证安装目录内容（可选，便于调试）
       # ------------------------------------------------------------
       - name: 验证安装目录内容
         run: |
@@ -485,7 +488,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 14. 打包
+      # 15. 打包
       # ------------------------------------------------------------
       - name: 准备打包
         run: |
