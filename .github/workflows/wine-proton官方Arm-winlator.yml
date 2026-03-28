@@ -293,6 +293,7 @@ jobs:
       # ------------------------------------------------------------
       # 11. 交叉编译 ARM64 WOW64（使用复制后的目录作为工具目录）
       #     修改：移除 --with-wine64，仅使用 --with-wine-tools 以强制重新编译 programs
+      #     修复：删除有问题的 atiadlxx 模块，避免编译错误
       # ------------------------------------------------------------
       - name: 交叉编译 ARM64 WOW64
         run: |
@@ -332,6 +333,7 @@ jobs:
             --with-sdl \
             --enable-nls \
             --disable-win16 \
+            --disable-tests \
             --without-capi \
             --without-oss \
             --without-cups \
@@ -352,6 +354,9 @@ jobs:
             build_alias=x86_64-linux-gnu \
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
+
+          # 删除有问题的 atiadlxx 模块，避免编译错误
+          rm -rf ${{ env.WINE_SOURCE_DIR }}/source/dlls/atiadlxx
 
           # 使用静默模式编译，同时将完整日志保存到文件（便于调试）
           make -s -j$(nproc) 2>&1 | tee build_cross.log
