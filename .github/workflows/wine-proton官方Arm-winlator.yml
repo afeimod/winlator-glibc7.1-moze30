@@ -114,6 +114,16 @@ jobs:
             libunwind-dev:arm64 \
             libgstreamer1.0-dev:arm64 \
             libgstreamer-plugins-base1.0-dev:arm64 \
+            gstreamer1.0-tools \
+            gstreamer1.0-plugins-base:arm64 \
+            gstreamer1.0-plugins-good:arm64 \
+            gstreamer1.0-plugins-bad:arm64 \
+            gstreamer1.0-plugins-ugly:arm64 \
+            libgstreamer-plugins-bad1.0-dev:arm64 \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-ugly \
+            libgstreamer-plugins-good1.0-dev:arm64 \
+            libgstreamer-plugins-bad1.0-dev:arm64 \
             libudev-dev:arm64 \
             libunwind-dev:arm64 \
             libsdl2-dev:arm64 \
@@ -127,12 +137,11 @@ jobs:
             libxkbregistry-dev:arm64 \
             libmpg123-dev:arm64 \
             libopenal-dev:arm64 \
-            libwayland-dev:arm64 \
-            gstreamer1.0-plugins-good \
-            gstreamer1.0-plugins-ugly \
-            libgstreamer-plugins-good1.0-dev:arm64 \
-            libgstreamer-plugins-bad1.0-dev:arm64
+            libwayland-dev:arm64
+            
 
+     
+      
       # ------------------------------------------------------------
       # 3. 安装 llvm-mingw 交叉编译工具链
       # ------------------------------------------------------------
