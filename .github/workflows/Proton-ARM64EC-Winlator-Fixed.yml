@@ -289,7 +289,7 @@ jobs:
           
           # Winlator 专用 LDFLAGS 配置
           export LDFLAGS="-s -Wl,--dynamic-linker=${{ env.WINLATOR_RUNTIME_PATH }}/lib/ld-linux-aarch64.so.1 -Wl,-rpath=${{ env.WINLATOR_RUNTIME_PATH }}/lib"
-LDFLAGS_EOF
+          LDFLAGS_EOF
           fi
           
           echo "=== 路径修改完成 ==="
