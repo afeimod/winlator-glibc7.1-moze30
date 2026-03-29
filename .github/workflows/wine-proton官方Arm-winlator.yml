@@ -219,20 +219,41 @@ jobs:
           python3 scripts/fix_wineboot_c.py .
           echo "=== 运行 fix_wdscore.py ==="
           python3 scripts/fix_wdscore.py .
-          echo "=== 运行 fix_fsync.py ==="
-          python3 scripts/fix_fsync.py .
-          echo "=== 运行 fix_virtual_c.py ==="
-          python3 scripts/fix_virtual_c.py .
-          echo "=== 运行 fix_window_c.py ==="
-          python3 scripts/fix_window_c.py .
           echo "=== 运行 fix_mouse_c.py ==="
           python3 scripts/fix_mouse_c.py .
           echo "所有修复脚本执行完成"
 
       # ------------------------------------------------------------
+      - name: 下载并应用 fix-build_ffmpeg.patch
+        run: |
+          set -e
+          # 确保 patch 命令可用
+          apt-get update && apt-get install -y --no-install-recommends patch
 
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          echo "下载补丁：https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch"
+          wget -q -O fix-build_ffmpeg.patch https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch
+
+          echo "正在应用补丁 ..."
+          patch -p1 < fix-build_ffmpeg.patch
+
+          echo "补丁应用成功，清理临时文件"
+          rm fix-build_ffmpeg.patch
+
+      - name: 修补 winnt.h 中的 MemoryBarrier 实现
+        run: |
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          # 备份原文件
+          cp include/winnt.h include/winnt.h.bak
+          # 将 MemoryBarrier 函数体中的 InterlockedOr 替换为 __sync_synchronize()
+          sed -i '/static FORCEINLINE void MemoryBarrier(void)/,/^}/ {
+              s/InterlockedOr(&dummy, 0);/__sync_synchronize();/
+          }' include/winnt.h
+          echo "MemoryBarrier 已修补为 __sync_synchronize()"
+      
       # 6. 修复 Termux 路径问题（原有步骤，保留）
       # ------------------------------------------------------------
+      
       - name: 修复 winlator 路径问题
         run: |
           cd ${{ env.WINE_SOURCE_DIR }}/source
@@ -246,16 +267,7 @@ jobs:
       # ------------------------------------------------------------
       # 7. 修补 winnt.h 中的 MemoryBarrier 实现（原空步骤，保留占位）
       # ------------------------------------------------------------
-      - name: 修补 winnt.h 中的 MemoryBarrier 实现
-        run: |
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          # 备份原文件
-          cp include/winnt.h include/winnt.h.bak
-          # 将 MemoryBarrier 函数体中的 InterlockedOr 替换为 __sync_synchronize()
-          sed -i '/static FORCEINLINE void MemoryBarrier(void)/,/^}/ {
-              s/InterlockedOr(&dummy, 0);/__sync_synchronize();/
-          }' include/winnt.h
-          echo "MemoryBarrier 已修补为 __sync_synchronize()"
+
       # ------------------------------------------------------------
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
