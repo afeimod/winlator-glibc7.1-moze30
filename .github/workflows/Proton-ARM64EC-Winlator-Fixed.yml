@@ -264,17 +264,7 @@ jobs:
             echo "警告: dlls/amd_ags_x64/dxvk_interfaces.idl 不存在，需要创建..."
             # 如果文件不存在，创建一个空的带 makedep 的文件
             mkdir -p dlls/amd_ags_x64/
-            cat > dlls/amd_ags_x64/dxvk_interfaces.idl << 'EOF'
-/* @makedep(ignore) */
-[
-  uuid(4a2eeb09-7450-4b23-b20c-7a4c81600c14),
-  oleautomation,
-  nonextensible
-]
-library DxvkInterfaces
-{
-}
-EOF
+            
             echo "已创建带 makedep 标志的 dxvk_interfaces.idl"
           fi
           
