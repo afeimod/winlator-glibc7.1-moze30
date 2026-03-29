@@ -213,9 +213,6 @@ jobs:
           python3 scripts/fix_mouse_c.py .
           echo "fix_mouse_c.py 执行完成"
           
-
-          
-          echo "=== 所有修复脚本执行完成 ==="
           
       # ------------------------------------------------------------
       # 7. 修复源码中的 tmp 路径为 Winlator 专用路径
@@ -268,6 +265,7 @@ jobs:
           else
             echo "警告: dlls/amd_ags_x64/dxvk_interfaces.idl 不存在，需要创建..."
             # 如果文件不存在，创建一个空的带 makedep 的文件
+            mkdir -p dlls/amd_ags_x64/
             
             echo "已创建带 makedep 标志的 dxvk_interfaces.idl"
           fi
@@ -315,9 +313,45 @@ jobs:
       - name: 准备 Wine 构建系统
         run: |
           cd wine-source
+          
+          echo "=== 第一步：make_requests ==="
           ./tools/make_requests
+          
+          echo "=== 第二步：make_specfiles ==="
           ./tools/make_specfiles
+          
+          echo "=== 第三步：修复 IDL 文件（在 make_makefiles 之前）==="
+          # 【关键】在 make_makefiles 之前必须确保所有 IDL 文件都有 @makedep 标志
+          # make_specfiles 可能会修改或重新生成 IDL 文件，所以需要在此处再次修复
+          
+          # 查找并修复所有缺少 makedep 标志的 IDL 文件
+          find dlls -name "*.idl" -type f 2>/dev/null | while read idl_file; do
+            if ! grep -q "@makedep" "$idl_file" 2>/dev/null; then
+              echo "修复缺少 makedep 的 IDL 文件: $idl_file"
+              # 在文件开头插入 @makedep 标志
+              if [ -s "$idl_file" ]; then
+                # 文件非空，使用 sed 在第一行前插入
+                sed -i '1i/* @makedep(ignore) */' "$idl_file" 2>/dev/null || {
+                  # 如果 sed 失败，使用 Python 方案
+                  python3 -c "
+import sys
+file_path = '$idl_file'
+with open(file_path, 'r') as f:
+    content = f.read()
+if '/* @makedep' not in content:
+    with open(file_path, 'w') as f:
+        f.write('/* @makedep(ignore) */\n' + content)
+print(f'Fixed: {file_path}')
+"
+                }
+              fi
+            fi
+          done
+          
+          echo "=== 第四步：make_makefiles ==="
           ./tools/make_makefiles
+          
+          echo "=== 第五步：autoreconf ==="
           autoreconf -f
 
       # ------------------------------------------------------------

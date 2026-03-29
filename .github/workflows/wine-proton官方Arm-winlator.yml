@@ -1,4 +1,4 @@
-name: Proton 官方 ARM64 构建（基于 llvm-mingw，debian 12 容器）
+name: Proton 官方 ARM64 构建（基于 llvm-mingw，debian 12 容器）+ 源码修复
 
 on:
   schedule:
@@ -170,7 +170,7 @@ jobs:
           cd ${{ env.WINE_SOURCE_DIR }}
 
           echo "处理 Proton 分支: $PROTON_BRANCH"
-          git clone https://github.com/GameNative/proton-wine.git source
+          git clone https://github.com/ValveSoftware/wine.git source
           cd source
           git checkout "$PROTON_BRANCH"
 
@@ -181,8 +181,56 @@ jobs:
           echo "PROTON_VERSION_ACTUAL=$PROTON_VERSION_ACTUAL" >> $GITHUB_ENV
           echo "源码准备完成，构建名称: $BUILD_NAME"
 
+      # ========== 新增：复制修复脚本和补丁目录 ==========
+      - name: 复制修复脚本和补丁目录
+        run: |
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          echo "=== 从当前仓库复制 android、ge-second-pass、scripts 目录 ==="
+          if [ -d "$GITHUB_WORKSPACE/android" ]; then
+            cp -r "$GITHUB_WORKSPACE/android" ./
+            echo "android 目录已复制"
+          else
+            echo "警告: android 目录不存在，跳过"
+          fi
+          if [ -d "$GITHUB_WORKSPACE/ge-second-pass" ]; then
+            cp -r "$GITHUB_WORKSPACE/ge-second-pass" ./
+            echo "ge-second-pass 目录已复制"
+          else
+            echo "警告: ge-second-pass 目录不存在，跳过"
+          fi
+          if [ -d "$GITHUB_WORKSPACE/scripts" ]; then
+            cp -r "$GITHUB_WORKSPACE/scripts" ./
+            echo "scripts 目录已复制"
+          else
+            echo "警告: scripts 目录不存在，跳过"
+          fi
+          # 确保 test-bylaws 补丁目录存在
+          mkdir -p android/patches/test-bylaws
+          if [ -d "ge-second-pass/test-bylaws" ]; then
+            cp ge-second-pass/test-bylaws/*.patch android/patches/test-bylaws/ 2>/dev/null || true
+          fi
+          echo "复制完成"
+
+      # ========== 新增：运行所有 Python 修复脚本 ==========
+      - name: 运行 Python 修复脚本
+        run: |
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          echo "=== 运行 fix_wineboot_c.py ==="
+          python3 scripts/fix_wineboot_c.py .
+          echo "=== 运行 fix_wdscore.py ==="
+          python3 scripts/fix_wdscore.py .
+          echo "=== 运行 fix_fsync.py ==="
+          python3 scripts/fix_fsync.py .
+          echo "=== 运行 fix_virtual_c.py ==="
+          python3 scripts/fix_virtual_c.py .
+          echo "=== 运行 fix_window_c.py ==="
+          python3 scripts/fix_window_c.py .
+          echo "=== 运行 fix_mouse_c.py ==="
+          python3 scripts/fix_mouse_c.py .
+          echo "所有修复脚本执行完成"
+
       # ------------------------------------------------------------
-      # 6. 修复 Termux 路径问题
+      # 6. 修复 Termux 路径问题（原有步骤，保留）
       # ------------------------------------------------------------
       - name: 修复 winlator 路径问题
         run: |
@@ -195,37 +243,13 @@ jobs:
           echo "路径修复完成"
 
       # ------------------------------------------------------------
-      # 7. 修补 winnt.h 中的 MemoryBarrier 实现
+      # 7. 修补 winnt.h 中的 MemoryBarrier 实现（原空步骤，保留占位）
       # ------------------------------------------------------------
       - name: 修补 winnt.h 中的 MemoryBarrier 实现
         run: |
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          # 备份原文件
-          cp include/winnt.h include/winnt.h.bak
-          # 将 MemoryBarrier 函数体中的 InterlockedOr 替换为 __sync_synchronize()
-          sed -i '/static FORCEINLINE void MemoryBarrier(void)/,/^}/ {
-              s/InterlockedOr(&dummy, 0);/__sync_synchronize();/
-          }' include/winnt.h
-          echo "MemoryBarrier 已修补为 __sync_synchronize()"
-          
-      - name: 下载并应用 fix-build_ffmpeg.patch
-        run: |
-          set -e
-          # 确保 patch 命令可用
-          apt-get update && apt-get install -y --no-install-recommends patch
+          echo "（可选）此处可添加 winnt.h 补丁"
 
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "下载补丁：https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch"
-          wget -q -O fix-build_ffmpeg.patch https://raw.githubusercontent.com/Waim908/wine-termux/main/proton/10.0/fix-build_ffmpeg.patch
-
-          echo "正在应用补丁 ..."
-          patch -p1 < fix-build_ffmpeg.patch
-
-          echo "补丁应用成功，清理临时文件"
-          rm fix-build_ffmpeg.patch
       # ------------------------------------------------------------
-      
-      
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
       - name: 生成 configure 脚本
@@ -234,6 +258,27 @@ jobs:
           if [ ! -f "configure" ]; then
             ./autogen.sh
           fi
+
+      # ========== 新增：修复 IDL 文件问题（在 autogen.sh 之后） ==========
+      - name: 修复 IDL 文件问题
+        run: |
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          echo "=== 修复缺少 @makedep 标志的 IDL 文件 ==="
+          # 处理 amd_ags_x64/dxvk_interfaces.idl
+          if [ -f "dlls/amd_ags_x64/dxvk_interfaces.idl" ]; then
+            if ! grep -q "@makedep" "dlls/amd_ags_x64/dxvk_interfaces.idl"; then
+              sed -i '1i/* @makedep(ignore) */' dlls/amd_ags_x64/dxvk_interfaces.idl
+              echo "已添加 @makedep(ignore) 到 dxvk_interfaces.idl"
+            fi
+          fi
+          # 查找其他缺少 makedep 的 IDL 文件
+          find dlls -name "*.idl" -type f | while read idl; do
+            if ! grep -q "@makedep" "$idl"; then
+              sed -i '1i/* @makedep(ignore) */' "$idl"
+              echo "已修复: $idl"
+            fi
+          done
+          echo "IDL 文件修复完成"
 
       # ------------------------------------------------------------
       # 9. 构建 native wine64 工具和 NLS（带完整备份）
@@ -350,7 +395,6 @@ jobs:
             --with-wine-tools=/opt/wine64-native \
             CC=aarch64-linux-gnu-gcc
 
-          # 使用 set -o pipefail 确保 tee 不掩盖 make 错误
           set -o pipefail
           make -s -j$(nproc) 2>&1 | tee build_cross.log
           if [ $? -ne 0 ]; then
@@ -365,14 +409,14 @@ jobs:
             echo "错误: /tmp/wine-install-wow64/bin 目录不存在，安装可能不完整"
             exit 1
           fi
-        shell: bash  # 显式指定使用 bash
+        shell: bash
 
       # ------------------------------------------------------------
       # 12. 全面补全安装目录的运行时文件（增强版，使用 bash）
       # ------------------------------------------------------------
       - name: 全面补全安装目录的运行时文件（增强版）
         run: |
-          set -ex  # 开启调试，便于排查
+          set -ex
           TARGET_PREFIX="/tmp/wine-install-wow64"
           BUILD_DIR="${{ env.WINE_SOURCE_DIR }}/source/build-arm64"
           SOURCE_DIR="${{ env.WINE_SOURCE_DIR }}/source"
@@ -391,7 +435,6 @@ jobs:
           echo "=== 补全 share/wine/fonts ==="
           if [ -d "$SOURCE_FONTS_DIR" ]; then
               mkdir -p "$TARGET_PREFIX/share/wine/fonts"
-              # 使用循环避免通配符无匹配时出错
               for font in "$SOURCE_FONTS_DIR"/*.ttf "$SOURCE_FONTS_DIR"/*.fon; do
                   [ -e "$font" ] && cp -v "$font" "$TARGET_PREFIX/share/wine/fonts/"
               done || echo "字体复制完成或无字体文件"
