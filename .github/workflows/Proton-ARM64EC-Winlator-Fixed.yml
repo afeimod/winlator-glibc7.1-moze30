@@ -331,12 +331,7 @@ jobs:
               # 在文件开头插入 @makedep 标志
               if [ -s "$idl_file" ]; then
                 # 文件非空，使用 sed 在第一行前插入
-                sed -i '1i/* @makedep(ignore) */' "$idl_file" 2>/dev/null || {
-                  # 如果 sed 失败，使用 Python 方案
-                  python3 -c "
-            
-                }
-              fi
+                sed -i '1i/* @makedep(ignore) */' "$idl_file" 2>/dev/null
             fi
           done
           
