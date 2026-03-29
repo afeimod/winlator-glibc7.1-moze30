@@ -223,6 +223,24 @@ jobs:
           python3 scripts/fix_test_bylaws_chain.py .
           echo "fix_test_bylaws_chain.py 执行完成"
           
+          # 【关键】手动添加缺失的 Wow64SuspendLocalThread 函数（修复验证失败）
+          echo "手动添加 Wow64SuspendLocalThread 函数..."
+          if ! grep -q "Wow64SuspendLocalThread" dlls/wow64/syscall.c; then
+            cat >> dlls/wow64/syscall.c << 'EOF'
+
+/**********************************************************************
+ *           Wow64SuspendLocalThread  (wow64.@)
+ */
+NTSTATUS WINAPI Wow64SuspendLocalThread( HANDLE thread, ULONG *count )
+{
+    return RtlWow64SuspendThread( thread, count );
+}
+EOF
+            echo "已添加 Wow64SuspendLocalThread 函数到 dlls/wow64/syscall.c"
+          else
+            echo "Wow64SuspendLocalThread 已存在，跳过"
+          fi
+          
           echo "=== 所有修复脚本执行完成 ==="
           
       # ------------------------------------------------------------
@@ -276,7 +294,6 @@ jobs:
           else
             echo "警告: dlls/amd_ags_x64/dxvk_interfaces.idl 不存在，需要创建..."
             # 如果文件不存在，创建一个空的带 makedep 的文件
-            mkdir -p dlls/amd_ags_x64/
             
             echo "已创建带 makedep 标志的 dxvk_interfaces.idl"
           fi
