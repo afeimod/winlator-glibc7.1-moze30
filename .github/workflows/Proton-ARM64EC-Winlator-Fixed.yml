@@ -23,8 +23,6 @@ env:
   # llvm-mingw 版本 - 使用验证过的版本
   LLVMMINGW_DATE: 20250920
   LLVMMINGW_NAME: llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64
-  # NDK 版本
-  NDK_VERSION: 27.3.13750724
   # Termuxfs 版本
   TERMUXFS_VERSION: build-20260218
 
@@ -111,16 +109,16 @@ jobs:
           git -C wine-source rev-parse HEAD
 
       # ------------------------------------------------------------
-      # 4. 应用 Android 构建脚本和所有补丁
+      # 4. 应用构建脚本和必要补丁
       # ------------------------------------------------------------
-      - name: 应用 Android 构建脚本和补丁
+      - name: 应用构建脚本和补丁
         run: |
           cd wine-source
           
-          # 复制 Android 补丁目录
+          # 复制补丁目录
           if [ -d "../proton-wine-proton_10.0/android" ]; then
             cp -r ../proton-wine-proton_10.0/android .
-            echo "Android 补丁目录已复制"
+            echo "补丁目录已复制"
           fi
           
           # 复制构建脚本
@@ -186,25 +184,7 @@ jobs:
           echo "$HOME/toolchains/${{ env.LLVMMINGW_NAME }}/bin" >> $GITHUB_PATH
 
       # ------------------------------------------------------------
-      # 6. 设置 Android NDK
-      # ------------------------------------------------------------
-      - name: 设置 Android NDK
-        run: |
-          NDK_DIR="$HOME/Android/Sdk/ndk/${{ env.NDK_VERSION }}"
-          if [ ! -d "$NDK_DIR" ]; then
-            echo "下载 Android NDK..."
-            mkdir -p "$HOME/Android/Sdk/ndk"
-            cd "$HOME/Android/Sdk/ndk"
-            wget -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
-            unzip -q android-ndk-r27d-linux.zip
-            mv android-ndk-r27d ${{ env.NDK_VERSION }}
-            rm -f android-ndk-r27d-linux.zip
-          else
-            echo "NDK 已安装，跳过下载"
-          fi
-
-      # ------------------------------------------------------------
-      # 7. 下载 Termux 文件系统
+      # 6. 下载 Termux 文件系统
       # ------------------------------------------------------------
       - name: 下载 Termuxfs
         run: |
@@ -221,7 +201,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 8. 运行 autogen.sh
+      # 7. 运行 autogen.sh
       # ------------------------------------------------------------
       - name: 运行 autogen.sh
         run: |
@@ -229,7 +209,7 @@ jobs:
           bash autogen.sh
 
       # ------------------------------------------------------------
-      # 9. 缓存 wine-tools
+      # 8. 缓存 wine-tools
       # ------------------------------------------------------------
       - name: 缓存 wine-tools
         id: cache-wine-tools
@@ -240,7 +220,7 @@ jobs:
           restore-keys: wine-tools-
 
       # ------------------------------------------------------------
-      # 10. 构建 wine-tools
+      # 9. 构建 wine-tools
       # ------------------------------------------------------------
       - name: 构建 wine-tools
         if: steps.cache-wine-tools.outputs.cache-hit != 'true'
@@ -253,7 +233,7 @@ jobs:
           echo "wine-tools 构建完成"
 
       # ------------------------------------------------------------
-      # 11. 配置 Winlator 专用路径（跳过 android_sysvshm）
+      # 10. 配置 Winlator 专用路径（跳过 android_sysvshm）
       # ------------------------------------------------------------
       - name: 配置 Winlator 专用路径
         run: |
@@ -284,13 +264,13 @@ jobs:
           echo "=== 跳过 android_sysvshm 构建（避免 _r_debug 冲突）==="
           sed -i 's|bash build-scripts/build-step-arm64ec.sh --build-sysvshm|# 跳过 android_sysvshm 构建 - 避免 _r_debug 冲突|g' build-scripts/build-step-arm64ec.sh
           
-          
+        
           
           echo "=== 路径修改完成 ==="
           grep -E "^export (install_dir|RUNTIME_PATH|LDFLAGS|OUTPUT_DIR)" build-scripts/build-step-arm64ec.sh | head -5
 
       # ------------------------------------------------------------
-      # 12. 验证所有必需的补丁文件存在
+      # 11. 验证所有必需的补丁文件存在
       # ------------------------------------------------------------
       - name: 验证补丁文件
         run: |
@@ -315,7 +295,7 @@ jobs:
           done
 
       # ------------------------------------------------------------
-      # 13. 配置构建
+      # 12. 配置构建
       # ------------------------------------------------------------
       - name: 配置 ARM64EC 构建
         id: configure_build
@@ -347,7 +327,7 @@ jobs:
           exit 1
 
       # ------------------------------------------------------------
-      # 14. 构建 Proton
+      # 13. 构建 Proton
       # ------------------------------------------------------------
       - name: 构建 Proton ARM64EC
         run: |
@@ -361,7 +341,7 @@ jobs:
           bash build-scripts/build-step-arm64ec.sh --build
 
       # ------------------------------------------------------------
-      # 15. 安装 Proton
+      # 14. 安装 Proton
       # ------------------------------------------------------------
       - name: 安装 Proton
         run: |
@@ -394,7 +374,7 @@ jobs:
           readelf -l "$HOME/compiled-files-aarch64/bin/wine" 2>/dev/null | grep -i interpreter || true
 
       # ------------------------------------------------------------
-      # 16. 打包 wine 内容
+      # 15. 打包 wine 内容
       # ------------------------------------------------------------
       - name: 打包 wine 内容
         run: |
@@ -429,7 +409,7 @@ jobs:
           ls -lh output/
 
       # ------------------------------------------------------------
-      # 17. 上传构建产物
+      # 16. 上传构建产物
       # ------------------------------------------------------------
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -440,7 +420,7 @@ jobs:
           retention-days: 30
 
       # ------------------------------------------------------------
-      # 18. 发布到 GitHub Release
+      # 17. 发布到 GitHub Release
       # ------------------------------------------------------------
       - name: 发布到 GitHub Release
         if: github.event_name == 'workflow_dispatch'
