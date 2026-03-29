@@ -181,24 +181,41 @@ jobs:
           echo "=== 修复 Wine 源码中的 IDL 文件问题 ==="
           echo "【重要】此步骤必须在 make_makefiles 之前执行！"
           
-          # 【方法1】直接删除有问题的 IDL 文件（推荐）
-          # amd_ags_x64 是一个可选的 DLL，很多构建不需要它
-          if [ -f "dlls/amd_ags_x64/dxvk_interfaces.idl" ]; then
-            echo "方案1: 删除 dlls/amd_ags_x64/ 目录（避免 makedep 问题）"
-            rm -rf dlls/amd_ags_x64/
-            echo "已删除 amd_ags_x64 目录"
-          fi
+          # 【关键】不能删除 amd_ags_x64 目录，因为 Makefile 引用了它
+          # 只需要修改 IDL 文件添加 @makedep 标志
           
-          # 【方法2】如果目录无法删除，修改 IDL 文件
+          # 方案1：直接修改 dxvk_interfaces.idl 文件
           if [ -f "dlls/amd_ags_x64/dxvk_interfaces.idl" ]; then
-            echo "方案2: 修改 IDL 文件添加 makedep 标志..."
-            if ! head -5 "dlls/amd_ags_x64/dxvk_interfaces.idl" | grep -q "@makedep"; then
+            echo "方案1: 修改 dxvk_interfaces.idl 添加 makedep 标志..."
+            
+            # 检查文件是否已经有 makedep 标志
+            if grep -q "@makedep" "dlls/amd_ags_x64/dxvk_interfaces.idl"; then
+              echo "文件已有 @makedep 标志，跳过"
+            else
+              # 在文件开头添加 makedep 忽略标志
               sed -i '1i/* @makedep(ignore) */' dlls/amd_ags_x64/dxvk_interfaces.idl
               echo "已添加 @makedep(ignore) 到 dxvk_interfaces.idl"
+              cat dlls/amd_ags_x64/dxvk_interfaces.idl | head -3
             fi
+          else
+            echo "警告: dlls/amd_ags_x64/dxvk_interfaces.idl 不存在，需要创建..."
+            # 如果文件不存在，创建一个空的带 makedep 的文件
+            mkdir -p dlls/amd_ags_x64/
+            cat > dlls/amd_ags_x64/dxvk_interfaces.idl << 'EOF'
+/* @makedep(ignore) */
+[
+  uuid(4a2eeb09-7450-4b23-b20c-7a4c81600c14),
+  oleautomation,
+  nonextensible
+]
+library DxvkInterfaces
+{
+}
+EOF
+            echo "已创建带 makedep 标志的 dxvk_interfaces.idl"
           fi
           
-          # 【方法3】查找并修复所有缺少 makedep 标志的 IDL 文件
+          # 方案2：查找并修复所有缺少 makedep 标志的 IDL 文件
           echo "=== 检查其他 IDL 文件 ==="
           if [ -d "dlls" ]; then
             find dlls -name "*.idl" -type f 2>/dev/null | while read idl_file; do
