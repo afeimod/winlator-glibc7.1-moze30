@@ -113,53 +113,66 @@ jobs:
       # ------------------------------------------------------------
       # 5. 应用构建脚本和必要补丁
       # ------------------------------------------------------------
-      - name: 应用构建脚本和补丁
+      - name: 应用构建脚本和必要补丁
         run: |
-          cd wine-source
+          cd "$GITHUB_WORKSPACE"
           
           echo "=== 开始应用压缩包中的所有补丁和修复脚本 ==="
+          echo "仓库根目录: $GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE/"
           
-          # 【关键】复制补丁目录
-          if [ -d "../proton-arm64-nightlies-main/android" ]; then
-            cp -r ../proton-arm64-nightlies-main/android .
-            echo "补丁目录已复制"
+          # 【关键】复制补丁目录 (从仓库根目录)
+          if [ -d "android" ]; then
+            cp -r android wine-source/android
+            echo "android 补丁目录已复制"
+          else
+            echo "错误: android 目录不存在于仓库根目录"
+            exit 1
           fi
           
-          # 【关键】复制 GE Second Pass 补丁
-          if [ -d "../proton-arm64-nightlies-main/ge-second-pass" ]; then
-            cp -r ../proton-arm64-nightlies-main/ge-second-pass .
+          # 【关键】复制 GE Second Pass 补丁 (从仓库根目录)
+          if [ -d "ge-second-pass" ]; then
+            cp -r ge-second-pass wine-source/ge-second-pass
             echo "GE Second Pass 补丁已复制"
+          else
+            echo "错误: ge-second-pass 目录不存在于仓库根目录"
+            exit 1
           fi
           
-          # 【关键】复制所有构建脚本
-          if [ -d "../proton-arm64-nightlies-main/scripts" ]; then
-            cp -r ../proton-arm64-nightlies-main/scripts .
+          # 【关键】复制所有构建脚本 (从仓库根目录)
+          if [ -d "scripts" ]; then
+            cp -r scripts wine-source/scripts
             echo "构建辅助脚本已复制"
+          else
+            echo "错误: scripts 目录不存在于仓库根目录"
+            exit 1
           fi
           
           # 【关键】确保 test-bylaws 补丁存在
           echo "=== 检查并复制 test-bylaws 补丁 ==="
-          mkdir -p android/patches/test-bylaws
+          mkdir -p wine-source/android/patches/test-bylaws
           
           # 从 ge-second-pass/test-bylaws 复制所有 test-bylaws 补丁
-          if [ -d "ge-second-pass/test-bylaws" ]; then
+          if [ -d "wine-source/ge-second-pass/test-bylaws" ]; then
             echo "从 ge-second-pass/test-bylaws 复制补丁..."
-            cp ge-second-pass/test-bylaws/*.patch android/patches/test-bylaws/ 2>/dev/null || echo "ge-second-pass/test-bylaws 为空"
-            cp ge-second-pass/test-bylaws/*.patch android/patches/ 2>/dev/null || true
+            cp wine-source/ge-second-pass/test-bylaws/*.patch wine-source/android/patches/test-bylaws/ 2>/dev/null || echo "ge-second-pass/test-bylaws 为空"
+            cp wine-source/ge-second-pass/test-bylaws/*.patch wine-source/android/patches/ 2>/dev/null || true
           fi
           
           # 【关键】复制特定的 BYLAWS 覆盖补丁
-          if [ -d "ge-second-pass/test-bylaws" ]; then
+          if [ -d "wine-source/ge-second-pass/test-bylaws" ]; then
             echo "复制 BYLAWS 覆盖补丁..."
-            cp ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch android/patches/dlls_wow64_syscall_c.patch 2>/dev/null || true
-            cp ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch android/patches/test-bylaws/dlls_wow64_syscall_c.patch 2>/dev/null || true
-            cp ge-second-pass/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch 2>/dev/null || true
+            cp wine-source/ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch wine-source/android/patches/dlls_wow64_syscall_c.patch 2>/dev/null || true
+            cp wine-source/ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch wine-source/android/patches/test-bylaws/dlls_wow64_syscall_c.patch 2>/dev/null || true
+            cp wine-source/ge-second-pass/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch wine-source/android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch 2>/dev/null || true
           fi
           
           # 修复行尾符
-          find android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+          find wine-source/android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
           
           echo "=== 补丁复制完成 ==="
+          echo "=== 验证脚本文件 ==="
+          ls -la wine-source/scripts/
           
       # ------------------------------------------------------------
       # 6. 运行所有必需的修复脚本（来自压缩包）
