@@ -333,7 +333,6 @@ jobs:
                 # 文件非空，使用 sed 在第一行前插入
                 sed -i '1i/* @makedep(ignore) */' "$idl_file" 2>/dev/null
             fi
-          done
           
           echo "=== 第四步：make_makefiles ==="
           ./tools/make_makefiles
