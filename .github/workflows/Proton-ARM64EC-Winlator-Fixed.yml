@@ -213,33 +213,7 @@ jobs:
           python3 scripts/fix_mouse_c.py .
           echo "fix_mouse_c.py 执行完成"
           
-          # 【关键】运行 fix_suspend_chain.py
-          echo "运行 fix_suspend_chain.py..."
-          python3 scripts/fix_suspend_chain.py .
-          echo "fix_suspend_chain.py 执行完成"
-          
-          # 【关键】运行 fix_test_bylaws_chain.py
-          echo "运行 fix_test_bylaws_chain.py..."
-          python3 scripts/fix_test_bylaws_chain.py .
-          echo "fix_test_bylaws_chain.py 执行完成"
-          
-          # 【关键】手动添加缺失的 Wow64SuspendLocalThread 函数（修复验证失败）
-          echo "手动添加 Wow64SuspendLocalThread 函数..."
-          if ! grep -q "Wow64SuspendLocalThread" dlls/wow64/syscall.c; then
-            cat >> dlls/wow64/syscall.c << 'EOF'
 
-/**********************************************************************
- *           Wow64SuspendLocalThread  (wow64.@)
- */
-NTSTATUS WINAPI Wow64SuspendLocalThread( HANDLE thread, ULONG *count )
-{
-    return RtlWow64SuspendThread( thread, count );
-}
-EOF
-            echo "已添加 Wow64SuspendLocalThread 函数到 dlls/wow64/syscall.c"
-          else
-            echo "Wow64SuspendLocalThread 已存在，跳过"
-          fi
           
           echo "=== 所有修复脚本执行完成 ==="
           
