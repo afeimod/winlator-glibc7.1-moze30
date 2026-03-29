@@ -283,6 +283,9 @@ jobs:
           sed -i "s|export RUNTIME_PATH=.*|export RUNTIME_PATH=\"${{ env.WINLATOR_RUNTIME_PATH }}\"|g" build-scripts/build-step-arm64ec.sh
           sed -i "s|export deps=.*|export deps=\"\$HOME/termuxfs/aarch64/data/data/com.termux/files/usr\"|g" build-scripts/build-step-arm64ec.sh
           
+          # 修改 OUTPUT_DIR 为正确的路径
+          sed -i 's|export OUTPUT_DIR="\$HOME/compiled-files-aarch64"|export OUTPUT_DIR="\$HOME/compiled-files-winlator"|g' build-scripts/build-step-arm64ec.sh
+          
           # 添加 Winlator 专用的 LDFLAGS（包含动态链接器路径）
           if ! grep -q "WINLATOR.*LDFLAGS" build-scripts/build-step-arm64ec.sh; then
             cat >> build-scripts/build-step-arm64ec.sh << 'LDFLAGS_EOF'
@@ -298,7 +301,7 @@ jobs:
           echo "WINLATOR_INSTALL_PATH=${{ env.WINLATOR_INSTALL_PATH }}"
           
           # 显示修改后的关键变量
-          grep -E "^export (install_dir|RUNTIME_PATH|LDFLAGS)" build-scripts/build-step-arm64ec.sh
+          grep -E "^export (install_dir|RUNTIME_PATH|LDFLAGS|OUTPUT_DIR)" build-scripts/build-step-arm64ec.sh
 
       # ------------------------------------------------------------
       # 13. 验证所有必需的补丁文件存在
@@ -370,23 +373,33 @@ jobs:
           cd wine-source
           bash build-scripts/build-step-arm64ec.sh --install
           
-          OUTPUT_DIR="$HOME/compiled-files-winlator"
-          echo "=== 输出目录 bin 内容 ==="
-          ls -la "$OUTPUT_DIR/bin/" || true
+          # 确认 OUTPUT_DIR 存在
+          echo "=== 检查编译输出目录 ==="
+          echo "HOME=$HOME"
+          echo "OUTPUT_DIR=$HOME/compiled-files-winlator"
+          ls -la "$HOME/compiled-files-winlator/" 2>/dev/null || echo "compiled-files-winlator 目录不存在"
+          
+          # 如果 winlator 目录不存在，检查 aarch64 目录
+          if [ ! -d "$HOME/compiled-files-winlator/bin" ]; then
+            echo "尝试检查 compiled-files-aarch64..."
+            ls -la "$HOME/compiled-files-aarch64/" 2>/dev/null || echo "compiled-files-aarch64 目录也不存在"
+          fi
+          
           echo "=== wine 二进制文件类型 ==="
-          file "$OUTPUT_DIR/bin/wine" 2>/dev/null || true
-          file "$OUTPUT_DIR/bin/wineserver" 2>/dev/null || true
+          file "$HOME/compiled-files-winlator/bin/wine" 2>/dev/null || \
+          file "$HOME/compiled-files-aarch64/bin/wine" 2>/dev/null || \
+          echo "找不到 wine 二进制文件"
           
           # 验证动态链接器
           echo "=== 验证 wine 动态链接器 ==="
-          readelf -l "$OUTPUT_DIR/bin/wine" 2>/dev/null | grep -i interpreter || true
+          readelf -l "$HOME/compiled-files-winlator/bin/wine" 2>/dev/null | grep -i interpreter || \
+          readelf -l "$HOME/compiled-files-aarch64/bin/wine" 2>/dev/null | grep -i interpreter || true
 
       # ------------------------------------------------------------
-      # 17. 直接打包 wine 内容
+      # 17. 打包 wine 内容
       # ------------------------------------------------------------
       - name: 打包 wine 内容
         run: |
-          OUTPUT_DIR="$HOME/compiled-files-winlator"
           GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
           GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
           PROTON_BRANCH="${{ github.event.inputs.proton_branch || 'proton_10.0' }}"
@@ -394,8 +407,21 @@ jobs:
           
           mkdir -p "$GITHUB_WORKSPACE/output"
           
+          # 确定实际的文件位置
+          if [ -d "$HOME/compiled-files-winlator/bin" ]; then
+            PACK_DIR="$HOME/compiled-files-winlator"
+          elif [ -d "$HOME/compiled-files-aarch64/bin" ]; then
+            PACK_DIR="$HOME/compiled-files-aarch64"
+          else
+            echo "错误: 找不到编译输出目录"
+            exit 1
+          fi
+          
+          echo "打包目录: $PACK_DIR"
+          ls -la "$PACK_DIR/"
+          
           # 直接打包 wine 内容（bin lib share）
-          cd "$OUTPUT_DIR"
+          cd "$PACK_DIR"
           tar cJf "$GITHUB_WORKSPACE/output/proton-${VERSION}.tar.xz" \
             bin lib share
           
