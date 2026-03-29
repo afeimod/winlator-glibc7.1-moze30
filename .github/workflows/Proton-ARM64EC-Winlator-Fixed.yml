@@ -334,15 +334,7 @@ jobs:
                 sed -i '1i/* @makedep(ignore) */' "$idl_file" 2>/dev/null || {
                   # 如果 sed 失败，使用 Python 方案
                   python3 -c "
-import sys
-file_path = '$idl_file'
-with open(file_path, 'r') as f:
-    content = f.read()
-if '/* @makedep' not in content:
-    with open(file_path, 'w') as f:
-        f.write('/* @makedep(ignore) */\n' + content)
-print(f'Fixed: {file_path}')
-"
+            
                 }
               fi
             fi
