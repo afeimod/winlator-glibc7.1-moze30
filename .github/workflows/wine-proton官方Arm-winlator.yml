@@ -174,7 +174,7 @@ jobs:
           cd ${{ env.WINE_SOURCE_DIR }}
 
           echo "处理 Proton 分支: $PROTON_BRANCH"
-          git clone https://github.com/ValveSoftware/wine.git source
+          git clone https://github.com/GameNative/proton-wine.git source
           cd source
           git checkout "$PROTON_BRANCH"
 
