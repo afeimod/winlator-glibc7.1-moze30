@@ -23,8 +23,6 @@ env:
   # llvm-mingw 版本 - 使用验证过的版本
   LLVMMINGW_DATE: 20250920
   LLVMMINGW_NAME: llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64
-  # NDK 版本
-  NDK_VERSION: 27.3.13750724
   # Termuxfs 版本
   TERMUXFS_VERSION: build-20260218
 
@@ -186,25 +184,7 @@ jobs:
           echo "$HOME/toolchains/${{ env.LLVMMINGW_NAME }}/bin" >> $GITHUB_PATH
 
       # ------------------------------------------------------------
-      # 6. 设置 Android NDK（必需的工具链）
-      # ------------------------------------------------------------
-      - name: 设置 Android NDK
-        run: |
-          NDK_DIR="$HOME/Android/Sdk/ndk/${{ env.NDK_VERSION }}"
-          if [ ! -d "$NDK_DIR" ]; then
-            echo "下载 Android NDK..."
-            mkdir -p "$HOME/Android/Sdk/ndk"
-            cd "$HOME/Android/Sdk/ndk"
-            wget -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
-            unzip -q android-ndk-r27d-linux.zip
-            mv android-ndk-r27d ${{ env.NDK_VERSION }}
-            rm -f android-ndk-r27d-linux.zip
-          else
-            echo "NDK 已安装，跳过下载"
-          fi
-
-      # ------------------------------------------------------------
-      # 7. 下载 Termux 文件系统
+      # 6. 下载 Termux 文件系统
       # ------------------------------------------------------------
       - name: 下载 Termuxfs
         run: |
@@ -221,7 +201,7 @@ jobs:
           fi
 
       # ------------------------------------------------------------
-      # 8. 运行 autogen.sh
+      # 7. 运行 autogen.sh
       # ------------------------------------------------------------
       - name: 运行 autogen.sh
         run: |
@@ -229,7 +209,7 @@ jobs:
           bash autogen.sh
 
       # ------------------------------------------------------------
-      # 9. 缓存 wine-tools
+      # 8. 缓存 wine-tools
       # ------------------------------------------------------------
       - name: 缓存 wine-tools
         id: cache-wine-tools
@@ -240,7 +220,7 @@ jobs:
           restore-keys: wine-tools-
 
       # ------------------------------------------------------------
-      # 10. 构建 wine-tools
+      # 9. 构建 wine-tools
       # ------------------------------------------------------------
       - name: 构建 wine-tools
         if: steps.cache-wine-tools.outputs.cache-hit != 'true'
@@ -253,7 +233,7 @@ jobs:
           echo "wine-tools 构建完成"
 
       # ------------------------------------------------------------
-      # 11. 配置 Winlator 专用路径（跳过 android_sysvshm）
+      # 10. 配置 Winlator 专用路径（使用 llvm-mingw）
       # ------------------------------------------------------------
       - name: 配置 Winlator 专用路径
         run: |
@@ -280,6 +260,20 @@ jobs:
           # 修改 OUTPUT_DIR 为正确的路径
           sed -i 's|export OUTPUT_DIR="\$HOME/compiled-files-aarch64"|export OUTPUT_DIR="\$HOME/compiled-files-winlator"|g' build-scripts/build-step-arm64ec.sh
           
+          # 【关键】修改为使用 llvm-mingw 工具链替代 NDK
+          echo "=== 修改为使用 llvm-mingw 工具链 ==="
+          sed -i 's|export TOOLCHAIN=.*|export TOOLCHAIN="$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64/bin"|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export TARGET=.*|export TARGET="aarch64-linux-gnu"|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export CC=.*|export CC=$TOOLCHAIN/aarch64-linux-gnu-clang|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export CXX=.*|export CXX=$TOOLCHAIN/aarch64-linux-gnu-clang++|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export AR=.*|export AR=$TOOLCHAIN/llvm-ar|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export LD=.*|export LD=$TOOLCHAIN/ld|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export RANLIB=.*|export RANLIB=$TOOLCHAIN/llvm-ranlib|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export STRIP=.*|export STRIP=$TOOLCHAIN/llvm-strip|g' build-scripts/build-step-arm64ec.sh
+          
+          # 移除 CPPFLAGS 中的 sysroot（llvm-mingw 不需要）
+          sed -i 's|export CPPFLAGS=.*|export CPPFLAGS="-I$deps/include"|g' build-scripts/build-step-arm64ec.sh
+          
           # 【关键】跳过 android_sysvshm 构建（避免 _r_debug 冲突）
           echo "=== 跳过 android_sysvshm 构建（避免 _r_debug 冲突）==="
           sed -i 's|bash build-scripts/build-step-arm64ec.sh --build-sysvshm|# 跳过 android_sysvshm 构建 - 避免 _r_debug 冲突|g' build-scripts/build-step-arm64ec.sh
@@ -288,13 +282,15 @@ jobs:
           echo "=== 移除 android-sysvshm 引用 ==="
           sed -i 's|export X_LIBS="-landroid-sysvshm"|export X_LIBS=""|g' build-scripts/build-step-arm64ec.sh
           
-
+          # 【关键】修复 LDFLAGS（使用 llvm-mingw 的正确路径，不重复）
+          echo "=== 修复 LDFLAGS ==="
+          sed -i 's|export LDFLAGS=.*|export LDFLAGS="-L$deps/lib -Wl,-rpath='$WINLATOR_RUNTIME_PATH'/lib -Wl,--dynamic-linker='$WINLATOR_RUNTIME_PATH'/lib/ld-linux-aarch64.so.1 -s"|g' build-scripts/build-step-arm64ec.sh
           
           echo "=== 路径修改完成 ==="
-          grep -E "^export (install_dir|RUNTIME_PATH|LDFLAGS|OUTPUT_DIR)" build-scripts/build-step-arm64ec.sh | head -5
+          grep -E "^export (install_dir|RUNTIME_PATH|LDFLAGS|OUTPUT_DIR|CC|TARGET)" build-scripts/build-step-arm64ec.sh | head -8
 
       # ------------------------------------------------------------
-      # 12. 验证所有必需的补丁文件存在
+      # 11. 验证所有必需的补丁文件存在
       # ------------------------------------------------------------
       - name: 验证补丁文件
         run: |
@@ -319,7 +315,7 @@ jobs:
           done
 
       # ------------------------------------------------------------
-      # 13. 配置构建
+      # 12. 配置构建
       # ------------------------------------------------------------
       - name: 配置 ARM64EC 构建
         id: configure_build
@@ -328,13 +324,8 @@ jobs:
           cd wine-source
           set -o pipefail
           
-          # 【关键】强制设置 Winlator 专用 LDFLAGS
-          echo "=== 强制设置 Winlator 专用 LDFLAGS ==="
-          export CFLAGS="-O3 -pipe"
-          export CXXFLAGS="-O3 -pipe"
-          export CROSSCFLAGS="-O3 -pipe"
-          export CROSSCXXFLAGS="-O3 -pipe"
-          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
+          # 使用已在步骤10配置好的 LDFLAGS
+          echo "=== 使用预配置的 LDFLAGS ==="
           echo "LDFLAGS=$LDFLAGS"
           
           bash -e build-scripts/build-step-arm64ec.sh --configure 2>&1 | tee configure-run.log
@@ -355,21 +346,23 @@ jobs:
           exit 1
 
       # ------------------------------------------------------------
-      # 14. 构建 Proton
+      # 13. 构建 Proton
       # ------------------------------------------------------------
       - name: 构建 Proton ARM64EC
         run: |
           cd wine-source
           
-          # 【关键】强制设置 Winlator 专用 LDFLAGS
-          echo "=== 强制设置 Winlator 专用 LDFLAGS ==="
-          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
+          # 使用已在步骤10配置好的 LDFLAGS
+          echo "=== 使用预配置的 LDFLAGS ==="
           echo "LDFLAGS=$LDFLAGS"
-          
+          export CFLAGS="-O3 -pipe"
+          export CXXFLAGS="-O3 -pipe"
+          export CROSSCFLAGS="-O3 -pipe"
+          export CROSSCXXFLAGS="-O3 -pipe"
           bash build-scripts/build-step-arm64ec.sh --build
 
       # ------------------------------------------------------------
-      # 15. 安装 Proton
+      # 14. 安装 Proton
       # ------------------------------------------------------------
       - name: 安装 Proton
         run: |
@@ -402,7 +395,7 @@ jobs:
           readelf -l "$HOME/compiled-files-aarch64/bin/wine" 2>/dev/null | grep -i interpreter || true
 
       # ------------------------------------------------------------
-      # 16. 打包 wine 内容
+      # 15. 打包 wine 内容
       # ------------------------------------------------------------
       - name: 打包 wine 内容
         run: |
@@ -437,7 +430,7 @@ jobs:
           ls -lh output/
 
       # ------------------------------------------------------------
-      # 17. 上传构建产物
+      # 16. 上传构建产物
       # ------------------------------------------------------------
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -448,7 +441,7 @@ jobs:
           retention-days: 30
 
       # ------------------------------------------------------------
-      # 18. 发布到 GitHub Release
+      # 17. 发布到 GitHub Release
       # ------------------------------------------------------------
       - name: 发布到 GitHub Release
         if: github.event_name == 'workflow_dispatch'
