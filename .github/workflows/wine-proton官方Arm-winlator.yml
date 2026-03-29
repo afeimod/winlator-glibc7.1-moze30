@@ -230,6 +230,7 @@ jobs:
           echo "所有修复脚本执行完成"
 
       # ------------------------------------------------------------
+
       # 6. 修复 Termux 路径问题（原有步骤，保留）
       # ------------------------------------------------------------
       - name: 修复 winlator 路径问题
@@ -247,8 +248,14 @@ jobs:
       # ------------------------------------------------------------
       - name: 修补 winnt.h 中的 MemoryBarrier 实现
         run: |
-          echo "（可选）此处可添加 winnt.h 补丁"
-
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          # 备份原文件
+          cp include/winnt.h include/winnt.h.bak
+          # 将 MemoryBarrier 函数体中的 InterlockedOr 替换为 __sync_synchronize()
+          sed -i '/static FORCEINLINE void MemoryBarrier(void)/,/^}/ {
+              s/InterlockedOr(&dummy, 0);/__sync_synchronize();/
+          }' include/winnt.h
+          echo "MemoryBarrier 已修补为 __sync_synchronize()"
       # ------------------------------------------------------------
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
