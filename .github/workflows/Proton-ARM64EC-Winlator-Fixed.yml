@@ -213,6 +213,8 @@ jobs:
           python3 scripts/fix_mouse_c.py .
           echo "fix_mouse_c.py 执行完成"
           
+
+          echo "=== 所有修复脚本执行完成 ==="
           
       # ------------------------------------------------------------
       # 7. 修复源码中的 tmp 路径为 Winlator 专用路径
@@ -329,10 +331,9 @@ jobs:
             if ! grep -q "@makedep" "$idl_file" 2>/dev/null; then
               echo "修复缺少 makedep 的 IDL 文件: $idl_file"
               # 在文件开头插入 @makedep 标志
-              if [ -s "$idl_file" ]; then
-                # 文件非空，使用 sed 在第一行前插入
-                sed -i '1i/* @makedep(ignore) */' "$idl_file" 2>/dev/null
+              sed -i '1i/* @makedep(ignore) */' "$idl_file"
             fi
+          done
           
           echo "=== 第四步：make_makefiles ==="
           ./tools/make_makefiles
