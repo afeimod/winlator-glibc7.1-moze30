@@ -257,6 +257,13 @@ jobs:
               s/InterlockedOr(&dummy, 0);/__sync_synchronize();/
           }' include/winnt.h
           echo "MemoryBarrier 已修补为 __sync_synchronize()"
+          
+      - name: 修补 wineboot.c 以跳过 ARM64 上的 initialize_xstate_features 调用
+        run: |
+          cd ${{ env.WINE_SOURCE_DIR }}/source
+          wget -q https://github.com/afeimod/linbox/raw/main/path/fix-wineboot.patch
+          patch -p1 < fix-wineboot.patch
+          rm fix-wineboot.patch
       # 8. 生成 configure 脚本
       # ------------------------------------------------------------
       - name: 生成 configure 脚本
