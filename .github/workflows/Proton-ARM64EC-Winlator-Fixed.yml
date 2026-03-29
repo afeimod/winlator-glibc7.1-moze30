@@ -225,6 +225,9 @@ jobs:
           echo "fix_mouse_c.py 执行完成"
           
 
+          
+          echo "=== 所有修复脚本执行完成 ==="
+          
       # ------------------------------------------------------------
       # 7. 修复源码中的 tmp 路径为 Winlator 专用路径
       # ------------------------------------------------------------
@@ -270,30 +273,54 @@ jobs:
       # ------------------------------------------------------------
       # 10. 准备 Wine 构建系统
       # ------------------------------------------------------------
-      # 10. 准备 Wine 构建系统
-      # ------------------------------------------------------------
       - name: 准备 Wine 构建系统
         run: |
           cd wine-source
-          
-          echo "=== 移除 amd_ags_x64 目录（修复 IDL 问题）==="
-          if [ -d "dlls/amd_ags_x64" ]; then
-            rm -rf dlls/amd_ags_x64
-            echo "amd_ags_x64 已移除"
-          fi
-          
+
           echo "=== 运行 make_requests ==="
           ./tools/make_requests
-          
+
           echo "=== 运行 make_specfiles ==="
           ./tools/make_specfiles
-          
+
+      # ------------------------------------------------------------
+      # 10.1 修复 IDL 文件问题
+      # ------------------------------------------------------------
+      - name: 修复 IDL 文件问题
+        run: |
+          cd wine-source
+
+          echo "=== 修复缺少 @makedep 标志的 IDL 文件 ==="
+
+          if [ -f "dlls/amd_ags_x64/dxvk_interfaces.idl" ]; then
+            if ! grep -q "@makedep" "dlls/amd_ags_x64/dxvk_interfaces.idl"; then
+              sed -i '1i/* @makedep(ignore) */' dlls/amd_ags_x64/dxvk_interfaces.idl
+              echo "已添加 @makedep(ignore) 到 dxvk_interfaces.idl"
+            fi
+          fi
+
+          find dlls -name "*.idl" -type f | while read idl; do
+            if ! grep -q "@makedep" "$idl"; then
+              sed -i '1i/* @makedep(ignore) */' "$idl"
+              echo "已修复: $idl"
+            fi
+          done
+
+          echo "IDL 文件修复完成"
+
+      # ------------------------------------------------------------
+      # 10.2 继续准备 Wine 构建系统
+      # ------------------------------------------------------------
+      - name: 继续准备 Wine 构建系统
+        run: |
+          cd wine-source
+
           echo "=== 运行 make_makefiles ==="
           ./tools/make_makefiles
-          
+
           echo "=== 运行 autoreconf ==="
           autoreconf -f
-          
+
           echo "=== Wine 构建系统准备完成 ==="
 
       # ------------------------------------------------------------
