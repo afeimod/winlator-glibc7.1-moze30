@@ -253,17 +253,7 @@ jobs:
           echo "wine-tools 构建完成"
 
       # ------------------------------------------------------------
-      # 11. 构建 android_sysvshm 库
-      # ------------------------------------------------------------
-      - name: 构建 android_sysvshm 库
-        run: |
-          cd wine-source
-          if [ -d "android/android_sysvshm" ]; then
-            bash build-scripts/build-step-arm64ec.sh --build-sysvshm
-          fi
-
-      # ------------------------------------------------------------
-      # 12. 修改构建脚本为 Winlator 专用路径
+      # 11. 配置 Winlator 专用路径（跳过 android_sysvshm）
       # ------------------------------------------------------------
       - name: 配置 Winlator 专用路径
         run: |
@@ -274,33 +264,33 @@ jobs:
           WINLATOR_RUNTIME_PATH="/data/data/com.winlator/files/imagefs/usr"
           WINLATOR_INSTALL_PATH="/data/data/com.winlator/files/imagefs/usr/opt/wine"
           
-          # 修复 tmp 路径问题（Winlator 专用）- 使用硬编码路径确保生效
+          # 修复 tmp 路径问题（Winlator 专用）
           echo "=== 修复 Winlator tmp 路径问题 ==="
-          echo "将 /tmp 替换为 $WINLATOR_TMP_DIR"
-          
-          # 修改所有源码文件中的 tmp 路径
           find . -type f \( -name "*.c" -o -name "*.h" -o -name "*.in" -o -name "*.spec" \) -exec grep -l "/tmp" {} \; 2>/dev/null | while read file; do
             sed -i "s|/tmp/|$WINLATOR_TMP_DIR/|g" "$file"
             echo "已修改: $file"
           done
           
-          # 修改 server 目录中的 tmp 路径
-          find server -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i "s|\"/tmp\"|\"$WINLATOR_TMP_DIR\"|g" {} + 2>/dev/null || true
+          # 修改构建脚本中的路径为 Winlator 专用
+          echo "=== 修改构建脚本路径 ==="
+          sed -i "s|export install_dir=.*|export install_dir=$WINLATOR_INSTALL_PATH|g" build-scripts/build-step-arm64ec.sh
+          sed -i "s|export RUNTIME_PATH=.*|export RUNTIME_PATH=\"$WINLATOR_RUNTIME_PATH\"|g" build-scripts/build-step-arm64ec.sh
+          sed -i "s|export deps=.*|export deps=\"\$HOME/termuxfs/aarch64/data/data/com.termux/files/usr\"|g" build-scripts/build-step-arm64ec.sh
           
-          # 修改特定文件中的 tmp 路径
-          for f in $(find . -name "file.c" -o -name "loader.c" -o -name "server.c"); do
-            if [ -f "$f" ]; then
-              sed -i "s|\"/tmp\"|\"$WINLATOR_TMP_DIR\"|g" "$f"
-              echo "已修改: $f"
-            fi
-          done
+          # 修改 OUTPUT_DIR 为正确的路径
+          sed -i 's|export OUTPUT_DIR="\$HOME/compiled-files-aarch64"|export OUTPUT_DIR="\$HOME/compiled-files-winlator"|g' build-scripts/build-step-arm64ec.sh
           
-          echo "tmp 路径修改完成"
+          # 【关键】跳过 android_sysvshm 构建（避免 _r_debug 冲突）
+          echo "=== 跳过 android_sysvshm 构建（避免 _r_debug 冲突）==="
+          sed -i 's|bash build-scripts/build-step-arm64ec.sh --build-sysvshm|# 跳过 android_sysvshm 构建 - 避免 _r_debug 冲突|g' build-scripts/build-step-arm64ec.sh
           
-
+          
+          
+          echo "=== 路径修改完成 ==="
+          grep -E "^export (install_dir|RUNTIME_PATH|LDFLAGS|OUTPUT_DIR)" build-scripts/build-step-arm64ec.sh | head -5
 
       # ------------------------------------------------------------
-      # 13. 验证所有必需的补丁文件存在
+      # 12. 验证所有必需的补丁文件存在
       # ------------------------------------------------------------
       - name: 验证补丁文件
         run: |
@@ -325,7 +315,7 @@ jobs:
           done
 
       # ------------------------------------------------------------
-      # 14. 配置构建
+      # 13. 配置构建
       # ------------------------------------------------------------
       - name: 配置 ARM64EC 构建
         id: configure_build
@@ -357,7 +347,7 @@ jobs:
           exit 1
 
       # ------------------------------------------------------------
-      # 15. 构建 Proton
+      # 14. 构建 Proton
       # ------------------------------------------------------------
       - name: 构建 Proton ARM64EC
         run: |
@@ -371,7 +361,7 @@ jobs:
           bash build-scripts/build-step-arm64ec.sh --build
 
       # ------------------------------------------------------------
-      # 16. 安装 Proton
+      # 15. 安装 Proton
       # ------------------------------------------------------------
       - name: 安装 Proton
         run: |
@@ -404,7 +394,7 @@ jobs:
           readelf -l "$HOME/compiled-files-aarch64/bin/wine" 2>/dev/null | grep -i interpreter || true
 
       # ------------------------------------------------------------
-      # 17. 打包 wine 内容
+      # 16. 打包 wine 内容
       # ------------------------------------------------------------
       - name: 打包 wine 内容
         run: |
@@ -439,7 +429,7 @@ jobs:
           ls -lh output/
 
       # ------------------------------------------------------------
-      # 18. 上传构建产物
+      # 17. 上传构建产物
       # ------------------------------------------------------------
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -450,7 +440,7 @@ jobs:
           retention-days: 30
 
       # ------------------------------------------------------------
-      # 19. 发布到 GitHub Release
+      # 18. 发布到 GitHub Release
       # ------------------------------------------------------------
       - name: 发布到 GitHub Release
         if: github.event_name == 'workflow_dispatch'
