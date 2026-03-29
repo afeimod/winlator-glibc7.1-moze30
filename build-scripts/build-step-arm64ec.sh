@@ -10,44 +10,25 @@ cd "$SOURCE_DIR"
 
 echo "=== 应用 ARM64EC Android 补丁 ==="
 
-# 定义要应用的补丁列表
+# 定义要应用的补丁列表 - 只包含实际存在的补丁
 PATCHES=(
-    # 必需的核心补丁
+    # 主要补丁
     "dlls_winex11_drv_mouse_c.patch"
     "dlls_winex11_drv_window_c.patch"
-    "dlls_winex11_drv_opengl_c.patch"
-    
-    # 游戏相关补丁
-    "0001-fshack-Implement-AMD-FSR-upscaler-for-fullscreen-hac.patch"
-    "0001-win32u-add-env-switch-to-disable-wm-decorations.patch"
-    
-    # Shell32 补丁
     "shell32_shlfileop_init_path_components.patch"
     "explorer_startmenu_shutdown_latch.patch"
 )
 
-# test-bylaws 补丁 - 这些补丁使用标记检测而不是反向检查
+# test-bylaws 补丁
 TEST_BYLAWS_PATCHES=(
     "test-bylaws/dlls_wow64_syscall_c.patch"
     "test-bylaws/dlls_ntdll_signal_arm64ec_c.patch"
-    "test-bylaws/dlls_ntdll_ntdll_misc_h.patch"
-    "test-bylaws/dlls_ntdll_ntdll_spec.patch"
-    "test-bylaws/dlls_ntdll_loader_c.patch"
-    "test-bylaws/dlls_ntdll_signal_arm64_c.patch"
-    "test-bylaws/dlls_ntdll_signal_x86_64_c.patch"
-    "test-bylaws/include_winnt_h.patch"
-    "test-bylaws/include_winternl_h.patch"
-    "test-bylaws/tools_makedep_c.patch"
 )
 
 # 定义标记映射表 (补丁名 -> 标记文本 -> 目标文件)
 declare -A PATCH_MARKERS
 PATCH_MARKERS["test-bylaws/dlls_ntdll_signal_arm64ec_c.patch"]="ARM64EC_NT_XCONTEXT|dlls/ntdll/signal_arm64ec.c"
-PATCH_MARKERS["test-bylaws/dlls_ntdll_signal_arm64_c.patch"]="RtlWow64SuspendThread|dlls/ntdll/signal_arm64.c"
-PATCH_MARKERS["test-bylaws/dlls_ntdll_signal_x86_64_c.patch"]="RtlWow64SuspendThread|dlls/ntdll/signal_x86_64.c"
-PATCH_MARKERS["test-bylaws/dlls_ntdll_ntdll_spec.patch"]="RtlWow64SuspendThread|dlls/ntdll/ntdll.spec"
-PATCH_MARKERS["test-bylaws/dlls_ntdll_ntdll_misc_h.patch"]="pWow64SuspendLocalThread|dlls/ntdll/ntdll_misc.h"
-PATCH_MARKERS["test-bylaws/dlls_ntdll_loader_c.patch"]="pWow64SuspendLocalThread|dlls/ntdll/loader.c"
+PATCH_MARKERS["test-bylaws/dlls_wow64_syscall_c.patch"]="Wow64SuspendLocalThread|dlls/wow64/syscall.c"
 PATCH_MARKERS["test-bylaws/dlls_wow64_syscall_c.patch"]="Wow64SuspendLocalThread|dlls/wow64/syscall.c"
 PATCH_MARKERS["test-bylaws/include_winnt_h.patch"]="XSTATE_ARM64_SVE|include/winnt.h"
 PATCH_MARKERS["test-bylaws/include_winternl_h.patch"]="THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE|include/winternl.h"
@@ -190,4 +171,3 @@ fi
 
 echo ""
 echo "=== ARM64EC 补丁应用完成 ==="
-
