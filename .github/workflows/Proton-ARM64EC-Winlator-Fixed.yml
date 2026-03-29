@@ -70,10 +70,7 @@ jobs:
             libtool \
             pkg-config \
             mingw-w64 \
-            gcc-multilib \
-            g++-multilib \
-            gcc-13-aarch64-linux-gnu \
-            g++-13-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
             libfreetype6-dev \
             libfreetype6-dev:i386 \
             libpng-dev \
@@ -330,14 +327,13 @@ jobs:
           cd wine-source
           set -o pipefail
           
-          # 设置所有必要的环境变量（使用系统交叉编译器）
+          # 设置环境变量（使用 llvm-mingw）
           export PATH="$HOME/toolchains/llvm-mingw-20260324-ucrt-ubuntu-22.04-x86_64/bin:$PATH"
-          export CC=aarch64-linux-gnu-gcc-13
-          export CXX=aarch64-linux-gnu-g++-13
-          export AR=aarch64-linux-gnu-ar
-          export LD=aarch64-linux-gnu-ld
-          export RANLIB=aarch64-linux-gnu-ranlib
-          export STRIP=aarch64-linux-gnu-strip
+          export TOOLCHAIN="$HOME/toolchains/llvm-mingw-20260324-ucrt-ubuntu-22.04-x86_64/bin"
+          export AR=llvm-ar
+          export LD=ld
+          export RANLIB=llvm-ranlib
+          export STRIP=llvm-strip
           export TARGET=aarch64-linux-gnu
           
           # 添加库搜索路径
@@ -346,27 +342,76 @@ jobs:
           echo "=== PATH ==="
           echo "$PATH"
           echo ""
-          echo "=== CC ==="
-          echo "$CC"
-          echo ""
-          echo "=== 验证 gcc 是否可用 ==="
-          which aarch64-linux-gnu-gcc-13 || echo "aarch64-linux-gnu-gcc-13 not found"
-          aarch64-linux-gnu-gcc-13 --version || echo "gcc --version failed"
+          echo "=== 验证 clang 是否可用 ==="
+          which clang || echo "clang not found"
+          which aarch64-linux-gnu-clang || echo "aarch64-linux-gnu-clang not found"
+          clang --version || echo "clang --version failed"
           
-          # 测试编译器是否能正常工作
-          echo ""
-          echo "=== 测试编译器 ==="
-          echo 'int main() { return 0; }' > /tmp/test.c
-          $CC -o /tmp/test /tmp/test.c 2>&1 || echo "Compiler test failed"
-          if [ -f /tmp/test ]; then
-            echo "Compiler works!"
-            file /tmp/test
-            rm -f /tmp/test /tmp/test.c
-          else
-            echo "Compiler failed to produce executable"
-          fi
+          # 直接调用 configure 并指定 CC
+          bash -e ./configure \
+            --enable-archs=arm64ec,aarch64,i386 \
+            --host=aarch64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr/opt/wine \
+            --bindir=/data/data/com.winlator/files/imagefs/usr/opt/wine/bin \
+            --libdir=/data/data/com.winlator/files/imagefs/usr/opt/wine/lib \
+            --exec-prefix=/data/data/com.winlator/files/imagefs/usr/opt/wine \
+            --with-mingw=clang \
+            --with-wine-tools=./wine-tools \
+            --enable-win64 \
+            --disable-win16 \
+            --enable-nls \
+            --disable-tests \
+            --with-alsa \
+            --without-capi \
+            --without-coreaudio \
+            --without-cups \
+            --without-dbus \
+            --without-ffmpeg \
+            --with-fontconfig \
+            --with-freetype \
+            --without-gcrypt \
+            --without-gettext \
+            --with-gettextpo=no \
+            --without-gphoto \
+            --with-gnutls \
+            --without-gssapi \
+            --with-gstreamer \
+            --without-inotify \
+            --without-krb5 \
+            --without-netapi \
+            --without-opencl \
+            --with-opengl \
+            --without-osmesa \
+            --without-oss \
+            --without-pcap \
+            --without-pcsclite \
+            --without-piper \
+            --with-pthread \
+            --with-pulse \
+            --without-sane \
+            --with-sdl \
+            --without-udev \
+            --without-unwind \
+            --without-usb \
+            --without-v4l2 \
+            --without-vosk \
+            --with-vulkan \
+            --without-wayland \
+            --without-xcomposite \
+            --without-xcursor \
+            --without-xfixes \
+            --without-xinerama \
+            --without-xinput \
+            --without-xinput2 \
+            --without-xrandr \
+            --without-xrender \
+            --without-xshape \
+            --with-xshm \
+            --without-xxf86vm \
+            CC=aarch64-linux-gnu-clang \
+            CXX=aarch64-linux-gnu-clang++ \
+            2>&1 | tee configure-run.log
           
-          bash -e build-scripts/build-step-arm64ec.sh --configure 2>&1 | tee configure-run.log
           test -f Makefile
 
       - name: 显示配置错误日志
@@ -390,21 +435,26 @@ jobs:
         run: |
           cd wine-source
           
-          # 设置环境变量（使用系统交叉编译器）
+          # 设置环境变量（使用 llvm-mingw）
           export PATH="$HOME/toolchains/llvm-mingw-20260324-ucrt-ubuntu-22.04-x86_64/bin:$PATH"
-          export CC=aarch64-linux-gnu-gcc-13
-          export CXX=aarch64-linux-gnu-g++-13
-          export AR=aarch64-linux-gnu-ar
-          export LD=aarch64-linux-gnu-ld
-          export RANLIB=aarch64-linux-gnu-ranlib
-          export STRIP=aarch64-linux-gnu-strip
+          export TOOLCHAIN="$HOME/toolchains/llvm-mingw-20260324-ucrt-ubuntu-22.04-x86_64/bin"
+          export AR=llvm-ar
+          export LD=ld
+          export RANLIB=llvm-ranlib
+          export STRIP=llvm-strip
           export TARGET=aarch64-linux-gnu
           export LIBRARY_PATH="$HOME/termuxfs/aarch64/data/data/com.termux/files/usr/lib:$LIBRARY_PATH"
           
-          echo "=== CC ==="
-          echo "$CC"
+          echo "=== PATH ==="
+          echo "$PATH"
+          echo "=== 开始构建 ==="
           
-          bash build-scripts/build-step-arm64ec.sh --build
+          make -j$(nproc) 2>&1 | tee build-run.log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "构建失败，显示最后 200 行日志："
+            tail -n 200 build-run.log
+            exit 1
+          fi
 
       # ------------------------------------------------------------
       # 14. 安装 Proton
