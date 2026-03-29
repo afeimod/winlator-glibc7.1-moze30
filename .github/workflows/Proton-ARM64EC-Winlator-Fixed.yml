@@ -117,25 +117,27 @@ jobs:
         run: |
           cd wine-source
           
-          # 复制补丁目录
+          echo "=== 开始应用压缩包中的所有补丁和修复脚本 ==="
+          
+          # 【关键】复制补丁目录
           if [ -d "../proton-arm64-nightlies-main/android" ]; then
             cp -r ../proton-arm64-nightlies-main/android .
             echo "补丁目录已复制"
           fi
           
-          # 复制 GE Second Pass 补丁
+          # 【关键】复制 GE Second Pass 补丁
           if [ -d "../proton-arm64-nightlies-main/ge-second-pass" ]; then
             cp -r ../proton-arm64-nightlies-main/ge-second-pass .
             echo "GE Second Pass 补丁已复制"
           fi
           
-          # 复制必要脚本
+          # 【关键】复制所有构建脚本
           if [ -d "../proton-arm64-nightlies-main/scripts" ]; then
             cp -r ../proton-arm64-nightlies-main/scripts .
             echo "构建辅助脚本已复制"
           fi
           
-          # 【关键修复】确保 test-bylaws 补丁存在
+          # 【关键】确保 test-bylaws 补丁存在
           echo "=== 检查并复制 test-bylaws 补丁 ==="
           mkdir -p android/patches/test-bylaws
           
@@ -146,11 +148,72 @@ jobs:
             cp ge-second-pass/test-bylaws/*.patch android/patches/ 2>/dev/null || true
           fi
           
+          # 【关键】复制特定的 BYLAWS 覆盖补丁
+          if [ -d "ge-second-pass/test-bylaws" ]; then
+            echo "复制 BYLAWS 覆盖补丁..."
+            cp ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch android/patches/dlls_wow64_syscall_c.patch 2>/dev/null || true
+            cp ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch android/patches/test-bylaws/dlls_wow64_syscall_c.patch 2>/dev/null || true
+            cp ge-second-pass/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch 2>/dev/null || true
+          fi
+          
           # 修复行尾符
           find android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-
+          
+          echo "=== 补丁复制完成 ==="
+          
       # ------------------------------------------------------------
-      # 6. 修复源码中的 tmp 路径为 Winlator 专用路径
+      # 6. 运行所有必需的修复脚本（来自压缩包）
+      # ------------------------------------------------------------
+      - name: 运行修复脚本
+        run: |
+          cd wine-source
+          
+          echo "=== 开始运行所有必需的修复脚本 ==="
+          
+          # 【关键】运行 fix_wineboot_c.py - 修复 initialize_xstate_features 问题
+          echo "运行 fix_wineboot_c.py..."
+          python3 scripts/fix_wineboot_c.py .
+          echo "fix_wineboot_c.py 执行完成"
+          
+          # 【关键】运行 fix_wdscore.py
+          echo "运行 fix_wdscore.py..."
+          python3 scripts/fix_wdscore.py .
+          echo "fix_wdscore.py 执行完成"
+          
+          # 【关键】运行 fix_fsync.py
+          echo "运行 fix_fsync.py..."
+          python3 scripts/fix_fsync.py .
+          echo "fix_fsync.py 执行完成"
+          
+          # 【关键】运行 fix_virtual_c.py
+          echo "运行 fix_virtual_c.py..."
+          python3 scripts/fix_virtual_c.py .
+          echo "fix_virtual_c.py 执行完成"
+          
+          # 【关键】运行 fix_window_c.py
+          echo "运行 fix_window_c.py..."
+          python3 scripts/fix_window_c.py .
+          echo "fix_window_c.py 执行完成"
+          
+          # 【关键】运行 fix_mouse_c.py
+          echo "运行 fix_mouse_c.py..."
+          python3 scripts/fix_mouse_c.py .
+          echo "fix_mouse_c.py 执行完成"
+          
+          # 【关键】运行 fix_suspend_chain.py
+          echo "运行 fix_suspend_chain.py..."
+          python3 scripts/fix_suspend_chain.py .
+          echo "fix_suspend_chain.py 执行完成"
+          
+          # 【关键】运行 fix_test_bylaws_chain.py
+          echo "运行 fix_test_bylaws_chain.py..."
+          python3 scripts/fix_test_bylaws_chain.py .
+          echo "fix_test_bylaws_chain.py 执行完成"
+          
+          echo "=== 所有修复脚本执行完成 ==="
+          
+      # ------------------------------------------------------------
+      # 7. 修复源码中的 tmp 路径为 Winlator 专用路径
       # ------------------------------------------------------------
       - name: 修复源码 tmp 路径
         run: |
@@ -169,9 +232,9 @@ jobs:
           echo "=== tmp 路径修复完成 ==="
 
       # ------------------------------------------------------------
-      # 7. 【关键】修复 Wine 源码中的 IDL 文件问题（在 make_makefiles 之前）
+      # 8. 【关键】修复 Wine 源码中的 IDL 文件问题（在 make_makefiles 之前）
       # ------------------------------------------------------------
-      # 注意：这个步骤必须在"准备 Wine 构建系统"步骤（步骤 9）之前执行
+      # 注意：这个步骤必须在"准备 Wine 构建系统"步骤（步骤 10）之前执行
       # 原因：make_makefiles 会检查所有 .idl 文件是否包含 @makedep 标志
       # 如果缺少该标志，会导致构建失败
       - name: 修复 IDL 文件问题
@@ -230,7 +293,7 @@ EOF
           echo "现在可以安全地运行 make_requests 和 make_makefiles"
 
       # ------------------------------------------------------------
-      # 8. 验证所有必需的补丁文件存在
+      # 9. 验证所有必需的补丁文件存在
       # ------------------------------------------------------------
       - name: 验证补丁文件
         run: |
@@ -253,7 +316,7 @@ EOF
           done
 
       # ------------------------------------------------------------
-      # 9. 准备 Wine 构建系统
+      # 10. 准备 Wine 构建系统
       # ------------------------------------------------------------
       - name: 准备 Wine 构建系统
         run: |
@@ -264,7 +327,7 @@ EOF
           autoreconf -f
 
       # ------------------------------------------------------------
-      # 10. 配置 ARM64 Android 交叉编译（使用 NDK）
+      # 11. 配置 ARM64 Android 交叉编译（使用 NDK）
       # ------------------------------------------------------------
       - name: 配置 ARM64 Android 交叉编译
         id: configure_build
@@ -392,7 +455,7 @@ EOF
           exit 1
 
       # ------------------------------------------------------------
-      # 11. 构建 host wine-tools
+      # 12. 构建 host wine-tools
       # ------------------------------------------------------------
       - name: 构建 host wine-tools
         run: |
@@ -401,7 +464,7 @@ EOF
           echo "wine-tools 构建完成"
 
       # ------------------------------------------------------------
-      # 12. 构建 Wine ARM64
+      # 13. 构建 Wine ARM64
       # ------------------------------------------------------------
       - name: 构建 Wine ARM64
         run: |
@@ -418,7 +481,7 @@ EOF
           fi
 
       # ------------------------------------------------------------
-      # 13. 安装 Wine
+      # 14. 安装 Wine
       # ------------------------------------------------------------
       - name: 安装 Wine
         run: |
@@ -455,7 +518,7 @@ EOF
           echo "INSTALL_DIR=$INSTALL_DIR" >> $GITHUB_ENV
 
       # ------------------------------------------------------------
-      # 14. 剥离调试符号
+      # 15. 剥离调试符号
       # ------------------------------------------------------------
       - name: 剥离调试符号
         run: |
@@ -470,7 +533,7 @@ EOF
           echo "剥离完成"
 
       # ------------------------------------------------------------
-      # 15. 打包 wine 内容
+      # 16. 打包 wine 内容
       # ------------------------------------------------------------
       - name: 打包 wine 内容
         run: |
@@ -495,7 +558,7 @@ EOF
           ls -lh output/
 
       # ------------------------------------------------------------
-      # 16. 上传构建产物
+      # 17. 上传构建产物
       # ------------------------------------------------------------
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -506,7 +569,7 @@ EOF
           retention-days: 30
 
       # ------------------------------------------------------------
-      # 17. 发布到 GitHub Release
+      # 18. 发布到 GitHub Release
       # ------------------------------------------------------------
       - name: 发布到 GitHub Release
         if: github.event_name == 'workflow_dispatch'
