@@ -86,18 +86,17 @@ jobs:
             patch
 
       # ------------------------------------------------------------
-      # 3. 获取 Proton 源码和 GameNative 补丁
+      # 3. 获取 Proton 源码
       # ------------------------------------------------------------
       - name: 克隆 Wine 源码
         run: |
           rm -rf wine-source
           PROTON_BRANCH="${{ github.event.inputs.proton_branch || 'proton_10.0' }}"
           
-          # 首先尝试克隆 GameNative/proton-wine
+          # 克隆 GameNative/proton-wine
           git clone --depth=1 --branch "$PROTON_BRANCH" \
             https://github.com/GameNative/proton-wine wine-source \
             || {
-              # 如果失败，回退到 ValveSoftware/wine
               echo "GameNative 仓库克隆失败，回退到 ValveSoftware/wine"
               git clone --depth=1 --branch "$PROTON_BRANCH" \
                 https://github.com/ValveSoftware/wine wine-source \
@@ -112,9 +111,9 @@ jobs:
           git -C wine-source rev-parse HEAD
 
       # ------------------------------------------------------------
-      # 4. 应用 Android 构建脚本和补丁
+      # 4. 应用 Android 构建脚本和所有补丁
       # ------------------------------------------------------------
-      - name: 应用 Android 构建脚本
+      - name: 应用 Android 构建脚本和补丁
         run: |
           cd wine-source
           
@@ -130,9 +129,10 @@ jobs:
             echo "构建脚本已复制"
           fi
           
-          # 复制 GE Second Pass 补丁（如果存在）
+          # 复制 GE Second Pass 补丁（包含 test-bylaws）
           if [ -d "../proton-arm64-nightlies-main/ge-second-pass" ]; then
             cp -r ../proton-arm64-nightlies-main/ge-second-pass .
+            echo "GE Second Pass 补丁已复制"
           fi
           
           # 复制必要脚本
@@ -141,28 +141,31 @@ jobs:
             echo "构建辅助脚本已复制"
           fi
           
-          # 应用 test-bylaws 补丁覆盖
-          if [ -d "android/patches/test-bylaws" ]; then
-            rm -f android/patches/test-bylaws/dlls_wow64_syscall_c.patch
-            rm -f android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch
-            
-            if [ -f "ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch" ]; then
-              cp ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch \
-                android/patches/dlls_wow64_syscall_c.patch
-              cp ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch \
-                android/patches/test-bylaws/dlls_wow64_syscall_c.patch
-            fi
-            
-            if [ -f "ge-second-pass/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch" ]; then
-              cp ge-second-pass/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch \
-                android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch
-            fi
-            
-            echo "test-bylaws 补丁已应用"
+          # 【关键修复】确保 test-bylaws 补丁存在
+          echo "=== 检查并复制 test-bylaws 补丁 ==="
+          
+          # 创建 test-bylaws 目录（如果不存在）
+          mkdir -p android/patches/test-bylaws
+          
+          # 从 ge-second-pass/test-bylaws 复制所有 test-bylaws 补丁
+          if [ -d "ge-second-pass/test-bylaws" ]; then
+            echo "从 ge-second-pass/test-bylaws 复制补丁..."
+            cp ge-second-pass/test-bylaws/*.patch android/patches/test-bylaws/ 2>/dev/null || echo "ge-second-pass/test-bylaws 为空"
+            cp ge-second-pass/test-bylaws/*.patch android/patches/ 2>/dev/null || true
           fi
           
+          # 如果 ge-second-pass 没有 test-bylaws，从 proton-wine 的 android/patches/test-bylaws 复制
+          if [ ! -d "ge-second-pass/test-bylaws" ] && [ -d "../proton-wine-proton_10.0/android/patches/test-bylaws" ]; then
+            echo "从 proton-wine/android/patches/test-bylaws 复制补丁..."
+            cp ../proton-wine-proton_10.0/android/patches/test-bylaws/*.patch android/patches/test-bylaws/ 2>/dev/null || echo "proton-wine test-bylaws 为空"
+          fi
+          
+          # 验证 test-bylaws 补丁是否存在
+          echo "=== 验证 test-bylaws 补丁 ==="
+          ls -la android/patches/test-bylaws/ || echo "test-bylaws 目录为空或不存在"
+          
           # 修复行尾符
-          find android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} +
+          find android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
 
       # ------------------------------------------------------------
       # 5. 下载 llvm-mingw 交叉编译工具链
@@ -281,11 +284,13 @@ jobs:
           sed -i "s|export deps=.*|export deps=\"\$HOME/termuxfs/aarch64/data/data/com.termux/files/usr\"|g" build-scripts/build-step-arm64ec.sh
           
           # 添加 Winlator 专用的 LDFLAGS（包含动态链接器路径）
-          cat >> build-scripts/build-step-arm64ec.sh << 'LDFLAGS_EOF'
+          if ! grep -q "WINLATOR.*LDFLAGS" build-scripts/build-step-arm64ec.sh; then
+            cat >> build-scripts/build-step-arm64ec.sh << 'LDFLAGS_EOF'
           
           # Winlator 专用 LDFLAGS 配置
           export LDFLAGS="-s -Wl,--dynamic-linker=${{ env.WINLATOR_RUNTIME_PATH }}/lib/ld-linux-aarch64.so.1 -Wl,-rpath=${{ env.WINLATOR_RUNTIME_PATH }}/lib"
-          LDFLAGS_EOF
+LDFLAGS_EOF
+          fi
           
           echo "=== 路径修改完成 ==="
           echo "WINLATOR_TMP_DIR=${{ env.WINLATOR_TMP_DIR }}"
@@ -296,7 +301,32 @@ jobs:
           grep -E "^export (install_dir|RUNTIME_PATH|LDFLAGS)" build-scripts/build-step-arm64ec.sh
 
       # ------------------------------------------------------------
-      # 13. 配置构建
+      # 13. 验证所有必需的补丁文件存在
+      # ------------------------------------------------------------
+      - name: 验证补丁文件
+        run: |
+          cd wine-source
+          echo "=== 验证 android/patches 目录结构 ==="
+          ls -la android/patches/
+          echo ""
+          echo "=== 验证 test-bylaws 补丁 ==="
+          ls -la android/patches/test-bylaws/ 2>/dev/null || echo "test-bylaws 目录不存在或为空"
+          echo ""
+          echo "=== 检查关键补丁文件是否存在 ==="
+          for patch in \
+            "test-bylaws/dlls_ntdll_signal_arm64ec_c.patch" \
+            "test-bylaws/dlls_wow64_syscall_c.patch" \
+            "test-bylaws/dlls_ntdll_unwind_h.patch" \
+            "test-bylaws/include_winnt_h.patch"; do
+            if [ -f "android/patches/$patch" ]; then
+              echo "✓ android/patches/$patch 存在"
+            else
+              echo "✗ android/patches/$patch 不存在!"
+            fi
+          done
+
+      # ------------------------------------------------------------
+      # 14. 配置构建
       # ------------------------------------------------------------
       - name: 配置 ARM64EC 构建
         id: configure_build
@@ -322,7 +352,7 @@ jobs:
           exit 1
 
       # ------------------------------------------------------------
-      # 14. 构建 Proton
+      # 15. 构建 Proton
       # ------------------------------------------------------------
       - name: 构建 Proton ARM64EC
         run: |
@@ -330,7 +360,7 @@ jobs:
           bash build-scripts/build-step-arm64ec.sh --build
 
       # ------------------------------------------------------------
-      # 15. 安装 Proton
+      # 16. 安装 Proton
       # ------------------------------------------------------------
       - name: 安装 Proton
         run: |
@@ -352,7 +382,7 @@ jobs:
           readelf -l "$OUTPUT_DIR/bin/wine" 2>/dev/null | grep -i interpreter || true
 
       # ------------------------------------------------------------
-      # 16. 下载 prefixPack.txz
+      # 17. 下载 prefixPack.txz
       # ------------------------------------------------------------
       - name: 下载 prefixPack
         run: |
@@ -361,7 +391,7 @@ jobs:
             -O "$OUTPUT_DIR/prefixPack.txz"
 
       # ------------------------------------------------------------
-      # 17. 生成 profile.json 并打包
+      # 18. 生成 profile.json 并打包
       # ------------------------------------------------------------
       - name: 生成 profile.json 并打包
         run: |
@@ -410,7 +440,7 @@ jobs:
           ls -lh output/
 
       # ------------------------------------------------------------
-      # 18. 上传构建产物
+      # 19. 上传构建产物
       # ------------------------------------------------------------
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -421,7 +451,7 @@ jobs:
           retention-days: 30
 
       # ------------------------------------------------------------
-      # 19. 发布到 GitHub Release
+      # 20. 发布到 GitHub Release
       # ------------------------------------------------------------
       - name: 发布到 GitHub Release
         if: github.event_name == 'workflow_dispatch'
