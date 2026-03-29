@@ -292,7 +292,7 @@ jobs:
           
           # Winlator 专用 LDFLAGS 配置
           export LDFLAGS="-s -Wl,--dynamic-linker=${{ env.WINLATOR_RUNTIME_PATH }}/lib/ld-linux-aarch64.so.1 -Wl,-rpath=${{ env.WINLATOR_RUNTIME_PATH }}/lib"
-          LDFLAGS_EOF
+LDFLAGS_EOF
           fi
           
           echo "=== 路径修改完成 ==="
@@ -337,6 +337,12 @@ jobs:
         run: |
           cd wine-source
           set -o pipefail
+          
+          # 【关键】强制设置 Winlator 专用 LDFLAGS
+          echo "=== 强制设置 Winlator 专用 LDFLAGS ==="
+          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
+          echo "LDFLAGS=$LDFLAGS"
+          
           bash -e build-scripts/build-step-arm64ec.sh --configure 2>&1 | tee configure-run.log
           test -f Makefile
 
@@ -360,6 +366,12 @@ jobs:
       - name: 构建 Proton ARM64EC
         run: |
           cd wine-source
+          
+          # 【关键】强制设置 Winlator 专用 LDFLAGS
+          echo "=== 强制设置 Winlator 专用 LDFLAGS ==="
+          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
+          echo "LDFLAGS=$LDFLAGS"
+          
           bash build-scripts/build-step-arm64ec.sh --build
 
       # ------------------------------------------------------------
