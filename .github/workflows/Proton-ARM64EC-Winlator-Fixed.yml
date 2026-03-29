@@ -169,40 +169,48 @@ jobs:
           echo "=== tmp 路径修复完成 ==="
 
       # ------------------------------------------------------------
-      # 7. 修复 Wine 源码中的 IDL 文件问题
+      # 7. 【关键】修复 Wine 源码中的 IDL 文件问题（在 make_makefiles 之前）
       # ------------------------------------------------------------
+      # 注意：这个步骤必须在"准备 Wine 构建系统"步骤（步骤 9）之前执行
+      # 原因：make_makefiles 会检查所有 .idl 文件是否包含 @makedep 标志
+      # 如果缺少该标志，会导致构建失败
       - name: 修复 IDL 文件问题
         run: |
           cd wine-source
           
           echo "=== 修复 Wine 源码中的 IDL 文件问题 ==="
+          echo "【重要】此步骤必须在 make_makefiles 之前执行！"
           
-          # 修复 amd_ags_x64/dxvk_interfaces.idl 缺少 makedep 标志的问题
+          # 【方法1】直接删除有问题的 IDL 文件（推荐）
+          # amd_ags_x64 是一个可选的 DLL，很多构建不需要它
           if [ -f "dlls/amd_ags_x64/dxvk_interfaces.idl" ]; then
-            echo "修复 dlls/amd_ags_x64/dxvk_interfaces.idl..."
-            
-            # 检查是否已经有 makedep 标志
-            if ! grep -q "@makedep" dlls/amd_ags_x64/dxvk_interfaces.idl; then
-              # 在文件开头添加 makedep 忽略标志
+            echo "方案1: 删除 dlls/amd_ags_x64/ 目录（避免 makedep 问题）"
+            rm -rf dlls/amd_ags_x64/
+            echo "已删除 amd_ags_x64 目录"
+          fi
+          
+          # 【方法2】如果目录无法删除，修改 IDL 文件
+          if [ -f "dlls/amd_ags_x64/dxvk_interfaces.idl" ]; then
+            echo "方案2: 修改 IDL 文件添加 makedep 标志..."
+            if ! head -5 "dlls/amd_ags_x64/dxvk_interfaces.idl" | grep -q "@makedep"; then
               sed -i '1i/* @makedep(ignore) */' dlls/amd_ags_x64/dxvk_interfaces.idl
-              echo "已添加 @makedep(ignore) 标志"
-            else
-              echo "IDL 文件已有 makedep 标志，跳过"
+              echo "已添加 @makedep(ignore) 到 dxvk_interfaces.idl"
             fi
           fi
           
-          # 查找并修复其他可能缺少 makedep 标志的 IDL 文件
-          echo "=== 检查其他可能问题的 IDL 文件 ==="
-          find dlls -name "*.idl" -type f | while read idl_file; do
-            if ! grep -q "@makedep" "$idl_file"; then
-              echo "警告: $idl_file 缺少 makedep 标志"
-              # 为这些文件添加 ignore 标志
-              sed -i '1i/* @makedep(ignore) */' "$idl_file"
-              echo "已修复: $idl_file"
-            fi
-          done
+          # 【方法3】查找并修复所有缺少 makedep 标志的 IDL 文件
+          echo "=== 检查其他 IDL 文件 ==="
+          if [ -d "dlls" ]; then
+            find dlls -name "*.idl" -type f 2>/dev/null | while read idl_file; do
+              if ! grep -q "@makedep" "$idl_file" 2>/dev/null; then
+                echo "修复缺少 makedep 的文件: $idl_file"
+                sed -i '1i/* @makedep(ignore) */' "$idl_file" 2>/dev/null || true
+              fi
+            done
+          fi
           
           echo "=== IDL 文件修复完成 ==="
+          echo "现在可以安全地运行 make_requests 和 make_makefiles"
 
       # ------------------------------------------------------------
       # 8. 验证所有必需的补丁文件存在
