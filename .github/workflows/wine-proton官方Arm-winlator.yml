@@ -229,6 +229,20 @@ jobs:
           echo "=== 运行 fix_mouse_c.py ==="
           python3 scripts/fix_mouse_c.py .
           echo "所有修复脚本执行完成"
+          # 【关键】运行 fix_fsync.py
+          echo "运行 fix_fsync.py..."
+          python3 scripts/fix_fsync.py .
+          echo "fix_fsync.py 执行完成"
+          
+          # 【关键】运行 fix_virtual_c.py
+          echo "运行 fix_virtual_c.py..."
+          python3 scripts/fix_virtual_c.py .
+          echo "fix_virtual_c.py 执行完成"
+          
+          # 【关键】运行 fix_window_c.py
+          echo "运行 fix_window_c.py..."
+          python3 scripts/fix_window_c.py .
+          echo "fix_window_c.py 执行完成"
 
       # ------------------------------------------------------------
       - name: 下载并应用 fix-build_ffmpeg.patch
