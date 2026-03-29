@@ -289,7 +289,7 @@ jobs:
           
           # Winlator 专用 LDFLAGS 配置
           export LDFLAGS="-s -Wl,--dynamic-linker=${{ env.WINLATOR_RUNTIME_PATH }}/lib/ld-linux-aarch64.so.1 -Wl,-rpath=${{ env.WINLATOR_RUNTIME_PATH }}/lib"
-          LDFLAGS_EOF
+LDFLAGS_EOF
           fi
           
           echo "=== 路径修改完成 ==="
@@ -382,18 +382,9 @@ jobs:
           readelf -l "$OUTPUT_DIR/bin/wine" 2>/dev/null | grep -i interpreter || true
 
       # ------------------------------------------------------------
-      # 17. 下载 prefixPack.txz
+      # 17. 直接打包 wine 内容
       # ------------------------------------------------------------
-      - name: 下载 prefixPack
-        run: |
-          OUTPUT_DIR="$HOME/compiled-files-winlator"
-          wget -q "https://github.com/GameNative/bionic-prefix-files/raw/main/prefixPack-arm64ec.txz" \
-            -O "$OUTPUT_DIR/prefixPack.txz"
-
-      # ------------------------------------------------------------
-      # 18. 生成 profile.json 并打包
-      # ------------------------------------------------------------
-      - name: 生成 profile.json 并打包
+      - name: 打包 wine 内容
         run: |
           OUTPUT_DIR="$HOME/compiled-files-winlator"
           GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
@@ -403,36 +394,10 @@ jobs:
           
           mkdir -p "$GITHUB_WORKSPACE/output"
           
-          # 生成 profile.json（Winlator 专用格式）
-          cat > "$OUTPUT_DIR/profile.json" << EOF
-          {
-            "type": "Proton",
-            "versionName": "${VERSION}",
-            "versionCode": 1,
-            "description": "Proton ${PROTON_BRANCH} ARM64EC Winlator 构建 @ ${GIT_HASH} (${GIT_DATE})",
-            "files": [],
-            "wine": {
-              "binPath": "bin",
-              "libPath": "lib",
-              "prefixPack": "prefixPack.txz"
-            }
-          }
-          EOF
-          
-          # 创建 WCP 包
-          if [ -f "$GITHUB_WORKSPACE/scripts/create-proton-wcp.sh" ]; then
-            bash "$GITHUB_WORKSPACE/scripts/create-proton-wcp.sh" \
-              "$OUTPUT_DIR" \
-              "$GITHUB_WORKSPACE/output/proton-${VERSION}.wcp" \
-              "10.0.99-arm64ec" \
-              "1" \
-              "Proton ${PROTON_BRANCH} ARM64EC Winlator ${GIT_DATE} (${GIT_HASH})"
-          fi
-          
-          # 创建 tar.xz 压缩包
+          # 直接打包 wine 内容（bin lib share）
           cd "$OUTPUT_DIR"
           tar cJf "$GITHUB_WORKSPACE/output/proton-${VERSION}.tar.xz" \
-            bin lib share prefixPack.txz profile.json
+            bin lib share
           
           cd "$GITHUB_WORKSPACE"
           sha256sum "output/proton-${VERSION}.tar.xz" > "output/proton-${VERSION}.tar.xz.sha256"
@@ -440,7 +405,7 @@ jobs:
           ls -lh output/
 
       # ------------------------------------------------------------
-      # 19. 上传构建产物
+      # 18. 上传构建产物
       # ------------------------------------------------------------
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -451,7 +416,7 @@ jobs:
           retention-days: 30
 
       # ------------------------------------------------------------
-      # 20. 发布到 GitHub Release
+      # 19. 发布到 GitHub Release
       # ------------------------------------------------------------
       - name: 发布到 GitHub Release
         if: github.event_name == 'workflow_dispatch'
@@ -478,13 +443,14 @@ jobs:
             ## 包含组件
             - ✓ ARM64EC 原生 Proton 可执行文件
             - ✓ 支持运行 32/64 位 Windows 应用程序
-            - ✓ 包含 prefixPack 默认前缀
             - ✓ Winlator 专用路径配置
+            - ⚠️ 不包含 prefixPack，需要单独配置
 
             ## 安装说明
             1. 解压 tar.xz 文件
             2. 将内容放置在 Winlator 的合适位置
             3. 确保路径配置与 Winlator 环境匹配
+            4. 需要单独配置 prefix（Wine 前缀）
           files: |
             output/*
         env:
