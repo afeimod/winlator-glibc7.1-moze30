@@ -20,9 +20,9 @@ env:
   WINLATOR_RUNTIME_PATH: /data/data/com.winlator/files/imagefs/usr
   WINLATOR_INSTALL_PATH: /data/data/com.winlator/files/imagefs/usr/opt/wine
   
-  # llvm-mingw 版本 - 使用验证过的版本
-  LLVMMINGW_DATE: 20250920
-  LLVMMINGW_NAME: llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64
+  # llvm-mingw 版本 - 使用官方 mstorsjo 版本（成功案例使用）
+  LLVMMINGW_DATE: 20260324
+  LLVMMINGW_NAME: llvm-mingw-20260324-ucrt-ubuntu-22.04-x86_64
   # Termuxfs 版本
   TERMUXFS_VERSION: build-20260218
 
@@ -175,7 +175,7 @@ jobs:
             echo "下载 llvm-mingw..."
             mkdir -p "$HOME/toolchains"
             cd "$HOME/toolchains"
-            wget -q https://github.com/bylaws/llvm-mingw/releases/download/${{ env.LLVMMINGW_DATE }}/${{ env.LLVMMINGW_NAME }}.tar.xz
+            wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/${{ env.LLVMMINGW_DATE }}/${{ env.LLVMMINGW_NAME }}.tar.xz
             tar -xf ${{ env.LLVMMINGW_NAME }}.tar.xz
             rm -f ${{ env.LLVMMINGW_NAME }}.tar.xz
           else
@@ -262,7 +262,7 @@ jobs:
           
           # 【关键】修改为使用 llvm-mingw 工具链替代 NDK
           echo "=== 修改为使用 llvm-mingw 工具链 ==="
-          sed -i 's|export TOOLCHAIN=.*|export TOOLCHAIN="$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64/bin"|g' build-scripts/build-step-arm64ec.sh
+          sed -i 's|export TOOLCHAIN=.*|export TOOLCHAIN="$HOME/toolchains/llvm-mingw-20260324-ucrt-ubuntu-22.04-x86_64/bin"|g' build-scripts/build-step-arm64ec.sh
           sed -i 's|export TARGET=.*|export TARGET="aarch64-linux-gnu"|g' build-scripts/build-step-arm64ec.sh
           sed -i 's|export CC=.*|export CC=$TOOLCHAIN/aarch64-linux-gnu-clang|g' build-scripts/build-step-arm64ec.sh
           sed -i 's|export CXX=.*|export CXX=$TOOLCHAIN/aarch64-linux-gnu-clang++|g' build-scripts/build-step-arm64ec.sh
@@ -334,10 +334,7 @@ jobs:
           # 使用已在步骤10配置好的 LDFLAGS
           echo "=== 使用预配置的 LDFLAGS ==="
           echo "LDFLAGS=$LDFLAGS"
-          export CFLAGS="-O3 -pipe"
-          export CXXFLAGS="-O3 -pipe"
-          export CROSSCFLAGS="-O3 -pipe"
-          export CROSSCXXFLAGS="-O3 -pipe"
+          
           bash -e build-scripts/build-step-arm64ec.sh --configure 2>&1 | tee configure-run.log
           test -f Makefile
 
