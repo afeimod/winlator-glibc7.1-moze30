@@ -196,49 +196,8 @@ jobs:
           find . -name "file.c" -exec sed -i 's|"/tmp"|"/data/data/com.winlator/files/imagefs/usr/tmp"|g' {} +
           find . -name "loader.c" -exec sed -i 's|"/tmp"|"/data/data/com.winlator/files/imagefs/usr/tmp"|g' {} +
           find . -name "server.c" -exec sed -i 's|"/tmp"|"/data/data/com.winlator/files/imagefs/usr/tmp"|g' {} +
-          echo "路径修复完成"
-
-      # ------------------------------------------------------------
-      # 7. 修补 winnt.h 中的 MemoryBarrier 实现
-      # ------------------------------------------------------------
-      - name: 复制修复脚本和补丁目录
-        run: |
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "=== 从当前仓库复制scripts 目录 ==="
-          if [ -d "$GITHUB_WORKSPACE/scripts" ]; then
-            cp -r "$GITHUB_WORKSPACE/scripts" ./
-            echo "scripts 目录已复制"
-          else
-            echo "警告: scripts 目录不存在，跳过"
-          fi
-          # 确保 test-bylaws 补丁目录存在
-          mkdir -p android/patches/test-bylaws
-          if [ -d "ge-second-pass/test-bylaws" ]; then
-            cp ge-second-pass/test-bylaws/*.patch android/patches/test-bylaws/ 2>/dev/null || true
-          fi
-          echo "复制完成"
-
-      # ========== 新增：运行所有 Python 修复脚本 ==========
-      - name: 运行 Python 修复脚本
-        run: |
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          echo "=== 运行 fix_mouse_c.py ==="
-          python3 scripts/fix_mouse_c.py .
-          echo "所有修复脚本执行完成"
-          # 【关键】运行 fix_fsync.py
-          echo "运行 fix_fsync.py..."
-          python3 scripts/fix_fsync.py .
-          echo "fix_fsync.py 执行完成"
-          
-          # 【关键】运行 fix_virtual_c.py
-          echo "运行 fix_virtual_c.py..."
-          python3 scripts/fix_virtual_c.py .
-          echo "fix_virtual_c.py 执行完成"
-          
-          # 【关键】运行 fix_window_c.py
-          echo "运行 fix_window_c.py..."
-          python3 scripts/fix_window_c.py .
-          echo "fix_window_c.py 执行完成"
+          echo "路径修"
+      
 
       # ------------------------------------------------------------
       - name: 下载并应用 fix-build_ffmpeg.patch
@@ -257,16 +216,7 @@ jobs:
           echo "补丁应用成功，清理临时文件"
           rm fix-build_ffmpeg.patch
 
-      - name: 修补 winnt.h 中的 MemoryBarrier 实现
-        run: |
-          cd ${{ env.WINE_SOURCE_DIR }}/source
-          # 备份原文件
-          cp include/winnt.h include/winnt.h.bak
-          # 将 MemoryBarrier 函数体中的 InterlockedOr 替换为 __sync_synchronize()
-          sed -i '/static FORCEINLINE void MemoryBarrier(void)/,/^}/ {
-              s/InterlockedOr(&dummy, 0);/__sync_synchronize();/
-          }' include/winnt.h
-          echo "MemoryBarrier 已修补为 __sync_synchronize()"
+      
           
       
       # 8. 生成 configure 脚本
