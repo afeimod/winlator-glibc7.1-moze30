@@ -392,147 +392,119 @@ jobs:
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           
-          # 生成 zh_CN.UTF-8 locale
-          sudo tee $PREFIX/lib/locale/locale-archive << 'LOCALES_EOF'
-zh_CN.UTF-8
-zh_CN.GB2312
-zh_CN.GBK
-zh_CN.GB18030
-zh_TW.UTF-8
-zh_TW.Big5
-zh_HK.UTF-8
-en_US.UTF-8
-C.UTF-8
-LOCALES_EOF
+          # 生成 locale-archive 文件
+          printf '%s\n' 'zh_CN.UTF-8' 'zh_CN.GB2312' 'zh_CN.GBK' 'zh_CN.GB18030' \
+            'zh_TW.UTF-8' 'zh_TW.Big5' 'zh_HK.UTF-8' 'en_US.UTF-8' 'C.UTF-8' \
+            > $PREFIX/lib/locale/locale-archive
           
           # 创建 locale.gen 文件
-          sudo tee $PREFIX/etc/locale.gen << 'LOCGEN_EOF'
-en_US.UTF-8 UTF-8
-en_GB.UTF-8 UTF-8
-zh_CN.UTF-8 UTF-8
-zh_CN.GB2312 GB2312
-zh_CN.GBK GBK
-zh_CN.GB18030 GB18030
-zh_TW.UTF-8 UTF-8
-zh_TW.Big5 Big5
-zh_HK.UTF-8 UTF-8
-ja_JP.UTF-8 UTF-8
-ko_KR.UTF-8 UTF-8
-de_DE.UTF-8 UTF-8
-fr_FR.UTF-8 UTF-8
-es_ES.UTF-8 UTF-8
-ru_RU.UTF-8 UTF-8
-pt_BR.UTF-8 UTF-8
-C.UTF-8 UTF-8
-POSIX POSIX
-LOCGEN_EOF
+          printf '%s\n' 'en_US.UTF-8 UTF-8' 'en_GB.UTF-8 UTF-8' 'zh_CN.UTF-8 UTF-8' \
+            'zh_CN.GB2312 GB2312' 'zh_CN.GBK GBK' 'zh_CN.GB18030 GB18030' \
+            'zh_TW.UTF-8 UTF-8' 'zh_TW.Big5 Big5' 'zh_HK.UTF-8 UTF-8' \
+            'ja_JP.UTF-8 UTF-8' 'ko_KR.UTF-8 UTF-8' 'de_DE.UTF-8 UTF-8' \
+            'fr_FR.UTF-8 UTF-8' 'es_ES.UTF-8 UTF-8' 'ru_RU.UTF-8 UTF-8' \
+            'pt_BR.UTF-8 UTF-8' 'C.UTF-8 UTF-8' 'POSIX POSIX' \
+            > $PREFIX/etc/locale.gen
       
       - name: 创建 locale 支持脚本
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           
           # 创建 locale 安装脚本
-          sudo tee $PREFIX/bin/install-locales.sh << 'SCRIPT_EOF'
-#!/bin/bash
-# Locales 安装脚本 - 为 Android 环境生成 locale 数据
-
-PREFIX="${PREFIX:-/data/data/com.winlator/files/imagefs/usr}"
-LOCDIR="$PREFIX/lib/locale"
-
-echo "正在生成 locales..."
-
-# 如果有 localedef 工具则使用它
-if command -v localedef &> /dev/null; then
-    # 生成 UTF-8 locales
-    localedef -i en_US -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/en_US.UTF-8 2>/dev/null || true
-    localedef -i zh_CN -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.UTF-8 2>/dev/null || true
-    localedef -i zh_CN -f GB2312 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GB2312 2>/dev/null || true
-    localedef -i zh_CN -f GBK -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GBK 2>/dev/null || true
-    localedef -i zh_CN -f GB18030 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GB18030 2>/dev/null || true
-    localedef -i zh_TW -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_TW.UTF-8 2>/dev/null || true
-    localedef -i zh_TW -f Big5 -A /usr/share/locale/locale.alias $LOCDIR/zh_TW.Big5 2>/dev/null || true
-    localedef -i zh_HK -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_HK.UTF-8 2>/dev/null || true
-    localedef -i C -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/C.UTF-8 2>/dev/null || true
-    echo "Locales 生成完成"
-else
-    echo "警告: localedef 未找到，跳过 locale 生成"
-    echo "请确保系统已有必要的 locale 数据"
-fi
-
-# 设置默认 locale 环境变量
-export LC_ALL=zh_CN.UTF-8
-export LANG=zh_CN.UTF-8
-
-echo "Locale 环境已配置"
-SCRIPT_EOF
+          printf '%s\n' '#!/bin/bash' '# Locales 安装脚本 - 为 Android 环境生成 locale 数据' '' \
+            'PREFIX="${PREFIX:-/data/data/com.winlator/files/imagefs/usr}"' \
+            'LOCDIR="$PREFIX/lib/locale"' '' \
+            'echo "正在生成 locales..."' '' \
+            '# 如果有 localedef 工具则使用它' \
+            'if command -v localedef &> /dev/null; then' \
+            '    # 生成 UTF-8 locales' \
+            '    localedef -i en_US -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/en_US.UTF-8 2>/dev/null || true' \
+            '    localedef -i zh_CN -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.UTF-8 2>/dev/null || true' \
+            '    localedef -i zh_CN -f GB2312 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GB2312 2>/dev/null || true' \
+            '    localedef -i zh_CN -f GBK -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GBK 2>/dev/null || true' \
+            '    localedef -i zh_CN -f GB18030 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GB18030 2>/dev/null || true' \
+            '    localedef -i zh_TW -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_TW.UTF-8 2>/dev/null || true' \
+            '    localedef -i zh_TW -f Big5 -A /usr/share/locale/locale.alias $LOCDIR/zh_TW.Big5 2>/dev/null || true' \
+            '    localedef -i zh_HK -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_HK.UTF-8 2>/dev/null || true' \
+            '    localedef -i C -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/C.UTF-8 2>/dev/null || true' \
+            '    echo "Locales 生成完成"' \
+            'else' \
+            '    echo "警告: localedef 未找到，跳过 locale 生成"' \
+            '    echo "请确保系统已有必要的 locale 数据"' \
+            'fi' '' \
+            '# 设置默认 locale 环境变量' \
+            'export LC_ALL=zh_CN.UTF-8' \
+            'export LANG=zh_CN.UTF-8' '' \
+            'echo "Locale 环境已配置"' \
+            > $PREFIX/bin/install-locales.sh
           sudo chmod +x $PREFIX/bin/install-locales.sh
       
       - name: 创建 locale.alias 文件
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
-          sudo tee $PREFIX/share/locale/locale.alias << 'ALIAS_EOF'
-# Locale 别名文件 - 支持中文及其他语言
-# This file maps locale names to locale archive names
-
-en_US.UTF-8            en_US.UTF-8
-en_US.utf8             en_US.UTF-8
-en_GB.UTF-8            en_GB.UTF-8
-en_GB.utf8             en_GB.UTF-8
-
-zh_CN.UTF-8            zh_CN.UTF-8
-zh_CN.utf8             zh_CN.UTF-8
-zh_CN                   zh_CN.UTF-8
-chinese                zh_CN.UTF-8
-prc                    zh_CN.UTF-8
-
-zh_CN.GB2312           zh_CN.GB2312
-zh_CN.gb2312           zh_CN.GB2312
-gb2312                 zh_CN.GB2312
-gbk                    zh_CN.GBK
-
-zh_CN.GB18030          zh_CN.GB18030
-gb18030                zh_CN.GB18030
-
-zh_TW.UTF-8            zh_TW.UTF-8
-zh_TW.utf8             zh_TW.UTF-8
-zh_TW                   zh_TW.UTF-8
-taiwan                 zh_TW.UTF-8
-
-zh_TW.Big5             zh_TW.Big5
-zh_TW.big5             zh_TW.Big5
-big5                   zh_TW.Big5
-
-zh_HK.UTF-8            zh_HK.UTF-8
-zh_HK.utf8             zh_HK.UTF-8
-hong_kong              zh_HK.UTF-8
-
-ja_JP.UTF-8            ja_JP.UTF-8
-japanese               ja_JP.UTF-8
-
-ko_KR.UTF-8            ko_KR.UTF-8
-korean                 ko_KR.UTF-8
-
-de_DE.UTF-8            de_DE.UTF-8
-german                 de_DE.UTF-8
-
-fr_FR.UTF-8            fr_FR.UTF-8
-french                 fr_FR.UTF-8
-
-es_ES.UTF-8            es_ES.UTF-8
-spanish                es_ES.UTF-8
-
-ru_RU.UTF-8            ru_RU.UTF-8
-russian                ru_RU.UTF-8
-
-pt_BR.UTF-8            pt_BR.UTF-8
-brazilian              pt_BR.UTF-8
-
-C.UTF-8                C.UTF-8
-POSIX                  POSIX
-
-# 默认映射
-default                 C.UTF-8
-ALIAS_EOF
+          printf '%s\n' \
+            '# Locale 别名文件 - 支持中文及其他语言' \
+            '# This file maps locale names to locale archive names' \
+            '' \
+            'en_US.UTF-8            en_US.UTF-8' \
+            'en_US.utf8             en_US.UTF-8' \
+            'en_GB.UTF-8            en_GB.UTF-8' \
+            'en_GB.utf8             en_GB.UTF-8' \
+            '' \
+            'zh_CN.UTF-8            zh_CN.UTF-8' \
+            'zh_CN.utf8             zh_CN.UTF-8' \
+            'zh_CN                   zh_CN.UTF-8' \
+            'chinese                zh_CN.UTF-8' \
+            'prc                    zh_CN.UTF-8' \
+            '' \
+            'zh_CN.GB2312           zh_CN.GB2312' \
+            'zh_CN.gb2312           zh_CN.GB2312' \
+            'gb2312                 zh_CN.GB2312' \
+            'gbk                    zh_CN.GBK' \
+            '' \
+            'zh_CN.GB18030          zh_CN.GB18030' \
+            'gb18030                zh_CN.GB18030' \
+            '' \
+            'zh_TW.UTF-8            zh_TW.UTF-8' \
+            'zh_TW.utf8             zh_TW.UTF-8' \
+            'zh_TW                   zh_TW.UTF-8' \
+            'taiwan                 zh_TW.UTF-8' \
+            '' \
+            'zh_TW.Big5             zh_TW.Big5' \
+            'zh_TW.big5             zh_TW.Big5' \
+            'big5                   zh_TW.Big5' \
+            '' \
+            'zh_HK.UTF-8            zh_HK.UTF-8' \
+            'zh_HK.utf8             zh_HK.UTF-8' \
+            'hong_kong              zh_HK.UTF-8' \
+            '' \
+            'ja_JP.UTF-8            ja_JP.UTF-8' \
+            'japanese               ja_JP.UTF-8' \
+            '' \
+            'ko_KR.UTF-8            ko_KR.UTF-8' \
+            'korean                 ko_KR.UTF-8' \
+            '' \
+            'de_DE.UTF-8            de_DE.UTF-8' \
+            'german                 de_DE.UTF-8' \
+            '' \
+            'fr_FR.UTF-8            fr_FR.UTF-8' \
+            'french                 fr_FR.UTF-8' \
+            '' \
+            'es_ES.UTF-8            es_ES.UTF-8' \
+            'spanish                es_ES.UTF-8' \
+            '' \
+            'ru_RU.UTF-8            ru_RU.UTF-8' \
+            'russian                ru_RU.UTF-8' \
+            '' \
+            'pt_BR.UTF-8            pt_BR.UTF-8' \
+            'brazilian              pt_BR.UTF-8' \
+            '' \
+            'C.UTF-8                C.UTF-8' \
+            'POSIX                  POSIX' \
+            '' \
+            '# 默认映射' \
+            'default                 C.UTF-8' \
+            > $PREFIX/share/locale/locale.alias
       
       - name: 创建中文 locale charmap 文件
         run: |
@@ -540,83 +512,84 @@ ALIAS_EOF
           sudo mkdir -p $PREFIX/share/i18n/charmaps
           
           # 创建 GB2312 charmap
-          sudo tee $PREFIX/share/i18n/charmaps/GB2312 << 'GB2312_EOF'
-# GB2312 charmap for Chinese locale
-<code_set_name> GB2312</code_set_name>
-<comment_char> %</comment_char>
-<escape_char> /</escape_char>
-
-CHARMAP
-NUL     \\x00
-SOH     \\x01
-STX     \\x02
-ETX     \\x03
-EOT     \\x04
-ENQ     \\x05
-ACK     \\x06
-BEL     \\x07
-BS      \\x08
-HT      \\x09
-LF      \\x0A
-VT      \\x0B
-FF      \\x0C
-CR      \\x0D
-SO      \\x0E
-SI      \\x0F
-DLE     \\x10
-DC1     \\x11
-DC2     \\x12
-DC3     \\x13
-DC4     \\x14
-NAK     \\x15
-SYN     \\x16
-ETB     \\x17
-CAN     \\x18
-EM      \\x19
-SUB     \\x1A
-ESC     \\x1B
-FS      \\x1C
-GS      \\x1D
-RS      \\x1E
-US      \\x1F
-SP      \\x20
-% Character set mapping
-END CHARMAP
-GB2312_EOF
+          printf '%s\n' \
+            '# GB2312 charmap for Chinese locale' \
+            '<code_set_name> GB2312</code_set_name>' \
+            '<comment_char> %</comment_char>' \
+            '<escape_char> /</escape_char>' \
+            '' \
+            'CHARMAP' \
+            'NUL     \\x00' \
+            'SOH     \\x01' \
+            'STX     \\x02' \
+            'ETX     \\x03' \
+            'EOT     \\x04' \
+            'ENQ     \\x05' \
+            'ACK     \\x06' \
+            'BEL     \\x07' \
+            'BS      \\x08' \
+            'HT      \\x09' \
+            'LF      \\x0A' \
+            'VT      \\x0B' \
+            'FF      \\x0C' \
+            'CR      \\x0D' \
+            'SO      \\x0E' \
+            'SI      \\x0F' \
+            'DLE     \\x10' \
+            'DC1     \\x11' \
+            'DC2     \\x12' \
+            'DC3     \\x13' \
+            'DC4     \\x14' \
+            'NAK     \\x15' \
+            'SYN     \\x16' \
+            'ETB     \\x17' \
+            'CAN     \\x18' \
+            'EM      \\x19' \
+            'SUB     \\x1A' \
+            'ESC     \\x1B' \
+            'FS      \\x1C' \
+            'GS      \\x1D' \
+            'RS      \\x1E' \
+            'US      \\x1F' \
+            'SP      \\x20' \
+            '% Character set mapping' \
+            'END CHARMAP' \
+            > $PREFIX/share/i18n/charmaps/GB2312
       
       - name: 创建环境变量配置文件
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
-          sudo tee $PREFIX/etc/profile.d/locale.sh << 'ENV_EOF'
-# Locale 环境变量配置
-# 支持中文显示
-
-# 默认语言设置
-export LANG=zh_CN.UTF-8
-export LC_ALL=zh_CN.UTF-8
-
-# 支持中文输入输出
-export G_BROKEN_FILENAMES=1
-export LC_CTYPE=zh_CN.UTF-8
-export LC_NUMERIC=C
-export LC_TIME=zh_CN.UTF-8
-export LC_COLLATE=zh_CN.UTF-8
-export LC_MONETARY=zh_CN.UTF-8
-export LC_MESSAGES=POSIX
-export LC_PAPER=zh_CN.UTF-8
-export LC_NAME=zh_CN.UTF-8
-export LC_ADDRESS=zh_CN.UTF-8
-export LC_TELEPHONE=zh_CN.UTF-8
-export LC_MEASUREMENT=zh_CN.UTF-8
-export LC_IDENTIFICATION=zh_CN.UTF-8
-
-# 字符集设置
-export CHARSET=UTF-8
-
-# 提示信息本地化
-export TEXTDOMAIN=coreutils
-export TEXTDOMAINDIR=$PREFIX/share/locale
-ENV_EOF
+          sudo mkdir -p $PREFIX/etc/profile.d
+          printf '%s\n' \
+            '# Locale 环境变量配置' \
+            '# 支持中文显示' \
+            '' \
+            '# 默认语言设置' \
+            'export LANG=zh_CN.UTF-8' \
+            'export LC_ALL=zh_CN.UTF-8' \
+            '' \
+            '# 支持中文输入输出' \
+            'export G_BROKEN_FILENAMES=1' \
+            'export LC_CTYPE=zh_CN.UTF-8' \
+            'export LC_NUMERIC=C' \
+            'export LC_TIME=zh_CN.UTF-8' \
+            'export LC_COLLATE=zh_CN.UTF-8' \
+            'export LC_MONETARY=zh_CN.UTF-8' \
+            'export LC_MESSAGES=POSIX' \
+            'export LC_PAPER=zh_CN.UTF-8' \
+            'export LC_NAME=zh_CN.UTF-8' \
+            'export LC_ADDRESS=zh_CN.UTF-8' \
+            'export LC_TELEPHONE=zh_CN.UTF-8' \
+            'export LC_MEASUREMENT=zh_CN.UTF-8' \
+            'export LC_IDENTIFICATION=zh_CN.UTF-8' \
+            '' \
+            '# 字符集设置' \
+            'export CHARSET=UTF-8' \
+            '' \
+            '# 提示信息本地化' \
+            'export TEXTDOMAIN=coreutils' \
+            "export TEXTDOMAINDIR=\$PREFIX/share/locale" \
+            > $PREFIX/etc/profile.d/locale.sh
           sudo chmod +x $PREFIX/etc/profile.d/locale.sh
       
       - name: 上传 Locales
@@ -1614,20 +1587,20 @@ ENV_EOF
           cd /opt
           sudo git clone https://gitlab.freedesktop.org/mesa/drm.git
           cd drm
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -1651,20 +1624,20 @@ EOF
           cd /opt
           sudo git clone https://github.com/KhronosGroup/Vulkan-Loader.git
           cd Vulkan-Loader
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -1688,20 +1661,20 @@ EOF
           cd /opt
           sudo git clone https://github.com/KhronosGroup/SPIRV-Tools.git
           cd SPIRV-Tools
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo cmake -B build \
@@ -1743,20 +1716,20 @@ EOF
           sudo wget -q https://downloads.sourceforge.net/freetype/freetype-2.13.3.tar.xz
           sudo tar -xf freetype-2.13.3.tar.xz
           cd freetype-2.13.3
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -1786,42 +1759,42 @@ EOF
           sudo wget -q https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/2.15.0/fontconfig-2.15.0.tar.gz
           sudo tar -xzf fontconfig-2.15.0.tar.gz
           cd fontconfig-2.15.0
-          cat > fcatomic.patch << 'EOF'
---- a/src/fcatomic.c
-+++ b/src/fcatomic.c
-@@ -130,15 +130,12 @@
- 	unlink ((char *) atomic->tmp);
- 	return FcFalse;
-     }
--    ret = link ((char *) atomic->tmp, (char *) atomic->lck);
--    if (ret < 0 && (errno == EPERM || errno == ENOTSUP || errno == EACCES))
--    {
-
- 	/* the filesystem where atomic->lck points to may not supports
- 	 * the hard link. so better try to fallback
- 	 */
- 	ret = mkdir ((char *) atomic->lck, 0600);
- 	no_link = FcTrue;
--    }
-     (void) unlink ((char *) atomic->tmp);
- #else
-     ret = mkdir ((char *) atomic->lck, 0600);
-EOF
+          printf '%s\n' \
+            '--- a/src/fcatomic.c' \
+            '+++ b/src/fcatomic.c' \
+            '@@ -130,15 +130,12 @@' \
+            ' 	unlink ((char *) atomic->tmp);' \
+            ' 	return FcFalse;' \
+            '     }' \
+            '-    ret = link ((char *) atomic->tmp, (char *) atomic->lck);' \
+            '-    if (ret < 0 && (errno == EPERM || errno == ENOTSUP || errno == EACCES))' \
+            '-    {' \
+            '' \
+            ' 	/* the filesystem where atomic->lck points to may not supports' \
+            ' 	 * the hard link. so better try to fallback' \
+            ' 	 */' \
+            ' 	ret = mkdir ((char *) atomic->lck, 0600);' \
+            ' 	no_link = FcTrue;' \
+            '-    }' \
+            '     (void) unlink ((char *) atomic->tmp);' \
+            ' #else' \
+            '     ret = mkdir ((char *) atomic->lck, 0600);' \
+            > fcatomic.patch
           sudo patch -p1 < fcatomic.patch
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -1907,20 +1880,20 @@ EOF
           # 移除 pidfd_open 检测
           sudo sed -i '/^# Check for pidfd_open/,/^endif$/d' meson.build
           
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
@@ -1972,20 +1945,20 @@ EOF
           sudo wget -q https://cairographics.org/releases/pixman-0.44.2.tar.gz
           sudo tar -xzf pixman-0.44.2.tar.gz
           cd pixman-0.44.2
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -2014,20 +1987,20 @@ EOF
           cd cairo-1.18.2
           sudo sed -i 's|char template\[\] = "/tmp/csi-font.XXXXXX";|char template[] = "/data/data/com.winlator/files/imagefs/tmp/csi-font.XXXXXX";|' util/cairo-script/cairo-script-operators.c
           sudo sed -i 's|ctx = DLCALL (cairo_script_create, "/tmp/fdr.trace");|ctx = DLCALL (cairo_script_create, "/data/data/com.winlator/files/imagefs/tmp/fdr.trace");|' util/cairo-fdr/fdr.c
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -2053,20 +2026,20 @@ EOF
           cd /opt
           sudo git clone https://github.com/fribidi/fribidi.git
           cd fribidi
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -2091,24 +2064,24 @@ EOF
           sudo sed -i '387,389s/^/\/\//' /data/data/com.winlator/files/imagefs/usr/include/inttypes.h
           sudo sed -i '390,393s/^/\/\//' /data/data/com.winlator/files/imagefs/usr/include/inttypes.h
           sudo sed -i '394,397s/^/\/\//' /data/data/com.winlator/files/imagefs/usr/include/inttypes.h
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[properties]
-c_args = ['-O2', '-pipe', '-Wno-error=redundant-decls']
-cpp_args = ['-O2', '-pipe', '-Wno-error=redundant-decls']
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[properties]' \
+            "c_args = ['-O2', '-pipe', '-Wno-error=redundant-decls']" \
+            "cpp_args = ['-O2', '-pipe', '-Wno-error=redundant-decls']" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR="/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig"
           export PKG_CONFIG_SYSROOT_DIR="/data/data/com.winlator/files/imagefs"
           sudo meson setup builddir \
@@ -2174,23 +2147,23 @@ EOF
           sudo wget -q https://gitlab.gnome.org/GNOME/pango/-/archive/1.54.0/pango-1.54.0.tar.gz
           sudo tar -xzf pango-1.54.0.tar.gz
           cd pango-1.54.0
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'aarch64-linux-gnu-pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-
-[properties]
-needs_exe_wrapper = true
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'aarch64-linux-gnu-pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            '' \
+            '[properties]' \
+            "needs_exe_wrapper = true" \
+            > cross-aarch64.txt
           sudo meson setup builddir \
             --cross-file cross-aarch64.txt \
             --prefix=/data/data/com.winlator/files/imagefs/usr \
@@ -2256,17 +2229,17 @@ EOF
           sudo wget -q https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.0/libjpeg-turbo-3.1.0.tar.gz
           sudo tar -xzf libjpeg-turbo-3.1.0.tar.gz
           cd libjpeg-turbo-3.1.0
-          cat > toolchain-aarch64.cmake << 'EOF'
-set(CMAKE_SYSTEM_NAME Linux)
-set(CMAKE_SYSTEM_PROCESSOR aarch64)
-set(CMAKE_SYSROOT /data/data/com.winlator/files/imagefs)
-set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
-set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
-set(CMAKE_FIND_ROOT_PATH /data/data/com.winlator/files/imagefs/usr)
-set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-EOF
+          printf '%s\n' \
+            "set(CMAKE_SYSTEM_NAME Linux)" \
+            "set(CMAKE_SYSTEM_PROCESSOR aarch64)" \
+            "set(CMAKE_SYSROOT /data/data/com.winlator/files/imagefs)" \
+            "set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)" \
+            "set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)" \
+            "set(CMAKE_FIND_ROOT_PATH /data/data/com.winlator/files/imagefs/usr)" \
+            "set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)" \
+            "set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)" \
+            "set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)" \
+            > toolchain-aarch64.cmake
           sudo cmake -B build \
             -DCMAKE_TOOLCHAIN_FILE=toolchain-aarch64.cmake \
             -DCMAKE_INSTALL_PREFIX=/data/data/com.winlator/files/imagefs/usr \
@@ -2382,20 +2355,20 @@ EOF
           sudo wget -q https://github.com/xiph/flac/releases/download/1.4.3/flac-1.4.3.tar.xz
           sudo tar -xf flac-1.4.3.tar.xz
           cd flac-1.4.3
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -2512,20 +2485,20 @@ EOF
           cd /opt
           sudo git clone https://gitlab.freedesktop.org/mesa/libglvnd.git
           cd libglvnd
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -2540,20 +2513,20 @@ EOF
           cd /opt
           sudo git clone https://github.com/torvalds/libepoxy.git
           cd libepoxy
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -2596,79 +2569,79 @@ EOF
           sudo wget -q https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.23.1/downloads/wayland-1.23.1.tar.xz
           sudo tar -xf wayland-1.23.1.tar.xz
           cd wayland-1.23.1
-          cat > setdirs.patch << 'EOF'
---- a/cursor/os-compatibility.c
-+++ b/cursor/os-compatibility.c
-@@ -138,8 +138,7 @@
- {
- 	path = getenv("XDG_RUNTIME_DIR");
- 	if (!path || path[0] != '/') {
--		errno = ENOENT;
--		return -1;
-+		path = "/data/data/com.winlator/files/imagefs/tmp";
- 	}
- 
- 	name_size = strlen(path) + sizeof(template);
---- a/src/wayland-client.c
-+++ b/src/wayland-client.c
-@@ -1109,11 +1109,7 @@
- 
- 	runtime_dir = getenv("XDG_RUNTIME_DIR");
- 	if (((!runtime_dir || runtime_dir[0] != '/') && !path_is_absolute)) {
--		wl_log("error: XDG_RUNTIME_DIR is invalid or not set in the environment.\n");
--		/* to prevent programs reporting
--		 * "failed to create display: Success" */
--		errno = ENOENT;
--		return -1;
-+		runtime_dir = "/data/data/com.winlator/files/imagefs/tmp";
- 	}
- 
- 	fd = wl_os_socket_cloexec(PF_LOCAL, SOCK_STREAM, 0);
---- a/src/wayland-server.c
-+++ b/src/wayland-server.c
-@@ -1629,13 +1629,7 @@
- 	if (name[0] != '/') {
- 		runtime_dir = getenv("XDG_RUNTIME_DIR");
- 		if (!runtime_dir || runtime_dir[0] != '/') {
--			wl_log("error: XDG_RUNTIME_DIR is invalid or not set in"
--			       " the environment\n");
--
--			/* to prevent programs reporting
--			 * "failed to add socket: Success" */
--			errno = ENOENT;
--			return -1;
-+			runtime_dir = "/data/data/com.winlator/files/imagefs/tmp";
- 		}
- 		separator = "/";
- 	}
-EOF
+          printf '%s\n' \
+            '--- a/cursor/os-compatibility.c' \
+            '+++ b/cursor/os-compatibility.c' \
+            '@@ -138,8 +138,7 @@' \
+            ' {' \
+            ' 	path = getenv("XDG_RUNTIME_DIR");' \
+            ' 	if (!path || path[0] != '\''\/'\'') {' \
+            '-\t\t\terrno = ENOENT;' \
+            '-\t\t\treturn -1;' \
+            '+\t\t\tpath = "/data/data/com.winlator/files/imagefs/tmp";' \
+            ' 	}' \
+            ' ' \
+            ' 	name_size = strlen(path) + sizeof(template);' \
+            '--- a/src/wayland-client.c' \
+            '+++ b/src/wayland-client.c' \
+            '@@ -1109,11 +1109,7 @@' \
+            ' ' \
+            ' 	runtime_dir = getenv("XDG_RUNTIME_DIR");' \
+            ' 	if (((!runtime_dir || runtime_dir[0] != '\''\/'\'') && !path_is_absolute)) {' \
+            '-\t\t\twl_log("error: XDG_RUNTIME_DIR is invalid or not set in the environment.\n");' \
+            '-\t\t\t/* to prevent programs reporting' \
+            '-\t\t\t * "failed to create display: Success" */' \
+            '-\t\t\terrno = ENOENT;' \
+            '-\t\t\treturn -1;' \
+            '+\t\t\truntime_dir = "/data/data/com.winlator/files/imagefs/tmp";' \
+            ' 	}' \
+            ' ' \
+            ' 	fd = wl_os_socket_cloexec(PF_LOCAL, SOCK_STREAM, 0);' \
+            '--- a/src/wayland-server.c' \
+            '+++ b/src/wayland-server.c' \
+            '@@ -1629,13 +1629,7 @@' \
+            ' 	if (name[0] != '\''\/'\'') {' \
+            ' \t\truntime_dir = getenv("XDG_RUNTIME_DIR");' \
+            ' \t\tif (!runtime_dir || runtime_dir[0] != '\''\/'\'') {' \
+            '-\t\t\twl_log("error: XDG_RUNTIME_DIR is invalid or not set in"' \
+            '-\t\t\t       " the environment\n");' \
+            ' ' \
+            '-\t\t\t/* to prevent programs reporting' \
+            '-\t\t\t * "failed to add socket: Success" */' \
+            '-\t\t\terrno = ENOENT;' \
+            '-\t\t\treturn -1;' \
+            '+\t\t\truntime_dir = "/data/data/com.winlator/files/imagefs/tmp";' \
+            ' \t\t}' \
+            ' \t\tseparator = "/";' \
+            ' \t}' \
+            > setdirs.patch
           sudo patch -p1 < setdirs.patch
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'aarch64-linux-gnu-pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-
-[properties]
-needs_exe_wrapper = true
-EOF
-          cat > native.txt << 'EOF'
-[binaries]
-c = 'gcc'
-cpp = 'g++'
-ar = 'ar'
-strip = 'strip'
-pkgconfig = 'pkg-config'
-wayland-scanner = '/usr/bin/wayland-scanner'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'aarch64-linux-gnu-pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            '' \
+            '[properties]' \
+            "needs_exe_wrapper = true" \
+            > cross-aarch64.txt
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'gcc'" \
+            "cpp = 'g++'" \
+            "ar = 'ar'" \
+            "strip = 'strip'" \
+            "pkgconfig = 'pkg-config'" \
+            "wayland-scanner = '/usr/bin/wayland-scanner'" \
+            > native.txt
           export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           sudo meson setup builddir \
             --cross-file cross-aarch64.txt \
@@ -2698,20 +2671,20 @@ EOF
           sudo wget -q https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.8.0.tar.gz -O libxkbcommon-1.8.0.tar.gz
           sudo tar -xzf libxkbcommon-1.8.0.tar.gz
           cd libxkbcommon-xkbcommon-1.8.0
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -2903,19 +2876,19 @@ EOF
           cd dbus-1.15.6
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           TMPDIR=/data/data/com.winlator/files/imagefs/tmp
-          cat > dbus-sysdeps-unix.patch << 'EOF'
---- a/dbus/dbus-sysdeps-unix.c
-+++ b/dbus/dbus-sysdeps-unix.c
-@@ -3602,7 +3602,7 @@
- 
-       /* And this is the sane fallback. */
-       if (tmpdir == NULL)
--        tmpdir = "/tmp";
-+        tmpdir = "/data/data/com.winlator/files/imagefs/tmp";
-     }
- 
-   _DBUS_UNLOCK (sysdeps);
-EOF
+          printf '%s\n' \
+            '--- a/dbus/dbus-sysdeps-unix.c' \
+            '+++ b/dbus/dbus-sysdeps-unix.c' \
+            '@@ -3602,7 +3602,7 @@' \
+            ' ' \
+            '       /* And this is the sane fallback. */' \
+            '       if (tmpdir == NULL)' \
+            '-        tmpdir = "/tmp";' \
+            '+        tmpdir = "/data/data/com.winlator/files/imagefs/tmp";' \
+            '     }' \
+            ' ' \
+            '   _DBUS_UNLOCK (sysdeps);' \
+            > dbus-sysdeps-unix.patch
           sudo patch -p1 < dbus-sysdeps-unix.patch
           export PKG_CONFIG_LIBDIR=${PREFIX}/lib/pkgconfig:${PREFIX}/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
@@ -2967,20 +2940,20 @@ EOF
               ${PATCH_DIR}/fix-paths.patch
             sudo patch -p1 < ${PATCH_DIR}/fix-paths.patch
           fi
-          cat > cross-aarch64.txt << 'EOF'
-[binaries]
-c = 'aarch64-linux-gnu-gcc'
-cpp = 'aarch64-linux-gnu-g++'
-ar = 'aarch64-linux-gnu-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'pkg-config'
-
-[host_machine]
-system = 'linux'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
-endian = 'little'
-EOF
+          printf '%s\n' \
+            '[binaries]' \
+            "c = 'aarch64-linux-gnu-gcc'" \
+            "cpp = 'aarch64-linux-gnu-g++'" \
+            "ar = 'aarch64-linux-gnu-ar'" \
+            "strip = 'aarch64-linux-gnu-strip'" \
+            "pkgconfig = 'pkg-config'" \
+            '' \
+            '[host_machine]' \
+            "system = 'linux'" \
+            "cpu_family = 'aarch64'" \
+            "cpu = 'aarch64'" \
+            "endian = 'little'" \
+            > cross-aarch64.txt
           export PKG_CONFIG_LIBDIR=${PREFIX}/lib/pkgconfig:${PREFIX}/share/pkgconfig
           export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
           sudo meson setup builddir \
@@ -3064,17 +3037,18 @@ EOF
           sudo make -j$(nproc)
           sudo make install DESTDIR=$PWD/package
       
-      - name: 准备最终构建
+      - name: 打包构建产物
         run: |
-          cd /opt/box64/build/package
-          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr/bin
-          sudo cp -r . /data/data/com.winlator/files/imagefs/usr/
+          cd /data/data/com.winlator/files
+          sudo tar -czvf imagefs.tar.gz imagefs
+          echo "打包完成，文件大小："
+          ls -lh imagefs.tar.gz
       
-      - name: 上传完整构建
+      - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
           name: winlator-glibc-complete
-          path: /data/data/com.winlator/files/imagefs
+          path: /data/data/com.winlator/files/imagefs.tar.gz
           retention-days: 5
 
   final-build:
