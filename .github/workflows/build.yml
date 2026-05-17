@@ -1,0 +1,2836 @@
+name: Winlator Glibc 构建
+
+run-name: 手动触发构建 - ${{ github.event.inputs.build_type || '完整构建' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - core
+          - x11
+          - multimedia
+      packages:
+        description: '指定包名（多个用逗号分隔，可选）'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  setup-build-env:
+    name: 环境准备
+    runs-on: ubuntu-24.04
+    
+    outputs:
+      build_id: ${{ steps.date.outputs.build_id }}
+    
+    steps:
+      - name: 生成构建ID
+        id: date
+        run: echo "build_id=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+      
+      - name: 检出仓库
+        uses: actions/checkout@v4
+      
+      - name: 安装构建依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential gettext bison flex python3 texinfo gawk sed \
+            grep bash perl jq git wget \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            pkg-config meson ninja-build cmake \
+            autoconf automake libtool \
+            xz-utils bzip2 gzip \
+            crossbib i386libc6-dev-i386-cross \
+            libc6-dev-arm64-cross linux-libc-dev-arm64-cross
+
+      - name: 创建工作目录
+        run: |
+          sudo mkdir -p /opt/build
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /opt/build
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 克隆依赖仓库
+        run: |
+          cd /opt
+          sudo git clone https://github.com/termux-pacman/glibc-packages.git || sudo git -C glibc-packages pull
+          sudo git clone https://github.com/moze30/winlator-wcp.git || sudo git -C winlator-wcp pull
+      
+      - name: 上传构建环境信息
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-env-${{ steps.date.outputs.build_id }}
+          path: |
+            /opt/glibc-packages
+            /opt/winlator-wcp
+          retention-days: 1
+
+  build-core-libraries:
+    name: 构建核心库
+    runs-on: ubuntu-24.04
+    needs: setup-build-env
+    
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: build-env-${{ needs.setup-build-env.outputs.build_id }}
+          path: /opt
+      
+      - name: 创建符号链接
+        run: |
+          sudo mkdir -p /opt/build
+          sudo chmod -R 777 /opt/build
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载 Linux 头文件
+        run: |
+          cd /opt
+          sudo wget -q https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.18.7.tar.xz
+          sudo tar xf linux-6.18.7.tar.xz
+          cd linux-6.18.7
+          sudo make mrproper
+          sudo make headers_install ARCH=arm64 INSTALL_HDR_PATH=/opt/tools
+          sudo rm -rf /opt/tools/include/drm
+      
+      - name: 构建 linux-api-headers
+        run: |
+          cd /opt
+          sudo wget -q https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.1.82.tar.xz
+          sudo tar xf linux-6.1.82.tar.xz
+          cd linux-6.1.82
+          sudo make headers_install ARCH=arm64 INSTALL_HDR_PATH=/data/data/com.winlator/files/imagefs/usr
+
+  build-glibc:
+    name: 构建 Glibc
+    runs-on: ubuntu-24.04
+    needs: build-core-libraries
+    
+    steps:
+      - name: 准备环境
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/workflows/scripts/glibc.yml
+      
+      - name: 准备构建环境
+        run: |
+          sudo mkdir -p /opt/build
+          sudo chmod -R 777 /opt/build
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载 Glibc 源码
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/libc/glibc-2.42.tar.xz
+          sudo tar xf glibc-2.42.tar.xz
+      
+      - name: 应用补丁
+        run: |
+          cd /opt/glibc-2.42
+          for patch in /opt/glibc-packages/gpkg/glibc/*.patch; do
+            if [[ "$patch" != *"set-dirs.patch" ]]; then
+              echo "应用补丁: $(basename $patch)"
+              sudo patch -p1 < "$patch"
+            fi
+          done
+      
+      - name: 复制 Termux 文件
+        run: |
+          cd /opt/glibc-2.42
+          sudo cp /opt/glibc-packages/gpkg/glibc/{shmat.c,shmctl.c,shmdt.c,shmget.c,mprotect.c,syscall.c,fakesyscall*.h,fake_epoll_pwait2.c,setfsuid.c,setfsgid.c} \
+            sysdeps/unix/sysv/linux/
+          sudo cp /opt/glibc-packages/gpkg/glibc/{android_passwd_group.c,android_passwd_group.h,android_system_user_ids.h} \
+            nss/
+          sudo cp /opt/glibc-packages/gpkg/glibc/syslog.c misc/
+          sudo cp /opt/glibc-packages/gpkg/glibc/{shmem-android.c,shmem-android.h} sysvipc/
+      
+      - name: 复制 Winlator 文件
+        run: |
+          cd /opt/glibc-2.42
+          sudo cp /opt/winlator-wcp/glibc_patches/{shmat.c,shmctl.c,shmdt.c,shmget.c,android_sysvshm.c,android_sysvshm.h} \
+            sysdeps/unix/sysv/linux/
+          sudo cp /opt/winlator-wcp/glibc_patches/android_sysvshm.c sysvipc/
+          sudo cp /opt/winlator-wcp/glibc_patches/android_sysvshm.h sysvipc/
+      
+      - name: 修改 sysvipc/Makefile
+        run: |
+          cd /opt/glibc-2.42/sysvipc
+          echo 'android_sysvshm.S' | sudo tee -a Makefile > /dev/null
+          cat Makefile | grep android_sysvshm || echo "android_sysvshm.S" | sudo tee -a Makefile
+      
+      - name: 生成 android_ids.h
+        run: |
+          cd /opt/glibc-2.42
+          sudo bash /opt/glibc-packages/gpkg/glibc/gen-android-ids.sh \
+            /opt/glibc-packages \
+            nss/android_ids.h \
+            /opt/glibc-packages/gpkg/glibc/android_system_user_ids.h
+      
+      - name: 删除不兼容文件
+        run: |
+          cd /opt/glibc-2.42
+          sudo rm -f sysdeps/unix/sysv/linux/aarch64/clone3.S
+      
+      - name: 重命名 syscall.S
+        run: |
+          cd /opt/glibc-2.42/sysdeps/unix/sysv/linux/aarch64
+          sudo mv syscall.S syscallS.S
+      
+      - name: 创建 disabled-syscall.h
+        run: |
+          cd /opt/glibc-2.42
+          sudo tee sysdeps/unix/sysv/linux/aarch64/disabled-syscall.h > /dev/null << 'EOF'
+            #define __NR_accept 202
+            #define __NR_faccessat2 439
+            #define __NR_fchmodat2 452
+            #define __NR_epoll_pwait2 441
+            #define __NR_statx 291
+            #define __NR_close_range 436
+            #define __NR_shmat 196
+            #define __NR_shmctl 195
+            #define __NR_shmdt 197
+            #define __NR_shmget 194
+            #define __NR_setuid 146
+            #define __NR_setgid 144
+            #define __NR_setreuid 145
+            #define __NR_setregid 143
+            #define __NR_setresuid 147
+            #define __NR_setresgid 149
+            #define __NR_setfsuid 151
+            #define __NR_setfsgid 152
+            #define __NR_clone3 435
+            #define __NR_futex_waitv 449
+            #define __NR_landlock_create_ruleset 444
+            #define __NR_pidfd_send_signal 424
+            #define __NR_rseq 293
+            #define __NR_set_robust_list 99
+            #define __NR_get_robust_list 100
+            #define __NR_io_uring_setup 425
+            #define __NR_io_uring_enter 426
+            #define __NR_io_uring_register 427
+            #define __NR_name_to_handle_at 264
+            #define __NR_open_by_handle_at 265
+            #define __NR_kcmp 272
+            #define __NR_mbind 235
+            #define __NR_get_mempolicy 236
+            #define __NR_set_mempolicy 237
+            #define __NR_mq_open 180
+            #define __NR_rt_sigreturn 139
+            #define __NR_semget 190
+            #define __NR_semctl 191
+            #define __NR_semop 193
+            #define __NR_semtimedop 192
+            #define __NR_msgctl 187
+            #define __NR_msgget 186
+            #define __NR_msgrcv 188
+            #define __NR_msgsnd 189
+
+            #define DISABLED_SYSCALL_WITH_FAKESYSCALL \
+        case __NR_shmat: \
+                return (long int)shmat(a0, (const void *)a1, a2); \
+        case __NR_setuid: \
+        case __NR_setgid: \
+        case __NR_setreuid: \
+        case __NR_setregid: \
+        case __NR_setresuid: \
+        case __NR_setresgid: \
+        case __NR_setfsuid: \
+        case __NR_setfsgid: \
+        case 1008: \
+                return 0; \
+        case __NR_clone3: \
+        case __NR_futex_waitv: \
+        case __NR_landlock_create_ruleset: \
+        case __NR_pidfd_send_signal: \
+        case __NR_rseq: \
+        case __NR_set_robust_list: \
+        case __NR_get_robust_list: \
+        case __NR_io_uring_setup: \
+        case __NR_io_uring_enter: \
+        case __NR_io_uring_register: \
+        case __NR_name_to_handle_at: \
+        case __NR_open_by_handle_at: \
+        case __NR_kcmp: \
+        case __NR_mbind: \
+        case __NR_get_mempolicy: \
+        case __NR_set_mempolicy: \
+        case __NR_mq_open: \
+        case __NR_rt_sigreturn: \
+        case __NR_semget: \
+        case __NR_semctl: \
+        case __NR_semop: \
+        case __NR_semtimedop: \
+        case __NR_msgctl: \
+        case __NR_msgget: \
+        case __NR_msgrcv: \
+        case __NR_msgsnd: \
+                return INLINE_SYSCALL_ERROR_RETURN_VALUE(ENOSYS); \
+        case __NR_accept: \
+                return accept4(a0, (struct sockaddr *)a1, (socklen_t *)a2, 0); \
+        case __NR_close_range: \
+                return close_range(a0, a1, a2); \
+        case __NR_faccessat2: \
+                return faccessat(a0, (const char *)a1, a2, a3); \
+        case __NR_epoll_pwait2: \
+                return fake_epoll_pwait2(a0, (struct epoll_event *)a1, a2, (const struct __timespec64 *)a3, (const __sigset_t *)a4, a5); \
+        case __NR_fchmodat2: \
+                return fchmodat(a0, (const char*)a1, a2, a3); \
+        case __NR_shmctl: \
+                return shmctl(a0, a1, (struct shmid_ds *)a2); \
+        case __NR_shmdt: \
+                return shmdt((const void *)a0); \
+        case __NR_shmget: \
+                return shmget(a0, a1, a2); \
+        case __NR_statx: \
+                return statx_generic(a0, (const char *)a1, a2, a3, (struct statx *)a4);
+EOF
+      
+      - name: 修改 shm-directory.h
+        run: |
+          cd /opt/glibc-2.42/include
+          sudo sed -i 's|#define SHMDIR _PATH_DEV "shm/"|#define SHMDIR "/data/user/0/com.winlator/files/imagefs/tmp/"|' shm-directory.h
+      
+      - name: 配置 Glibc
+        run: |
+          cd /opt/glibc-2.42
+          sudo mkdir -p build && cd build
+          sudo ../configure \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --libdir=/data/data/com.winlator/files/imagefs/usr/lib \
+            --libexecdir=/data/data/com.winlator/files/imagefs/usr/libexec \
+            --includedir=/data/data/com.winlator/files/imagefs/usr/include \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --target=aarch64-linux-gnu \
+            --with-headers=/opt/tools/include \
+            --with-bugurl=https://github.com/moze30/winlator-glibc/issues \
+            --with-pkgversion="GNU libc for Winlator-Glibc" \
+            --enable-bind-now \
+            --enable-fortify-source \
+            --disable-multi-arch \
+            --enable-stack-protector=strong \
+            --disable-systemtap \
+            --disable-nscd \
+            --disable-profile \
+            --disable-werror \
+            --disable-default-pie \
+            --enable-memory-tagging
+      
+      - name: 编译 Glibc
+        run: |
+          cd /opt/glibc-2.42/build
+          sudo make -j$(nproc)
+      
+      - name: 安装 Glibc
+        run: |
+          cd /opt/glibc-2.42/build
+          sudo make install DESTDIR=$PWD/package
+          sudo tar -czf /opt/build/glibc.tar.gz -C package .
+      
+      - name: 上传 Glibc
+        uses: actions/upload-artifact@v4
+        with:
+          name: glibc-package
+          path: /opt/build/glibc.tar.gz
+          retention-days: 1
+
+  build-gcc-libs:
+    name: 构建 GCC-Libs
+    runs-on: ubuntu-24.04
+    needs: build-glibc
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: glibc-package
+          path: /opt/build
+      
+      - name: 解压 Glibc
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo tar -xzf /opt/build/glibc.tar.gz -C /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 下载 GCC 源码
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/gcc/gcc-14.2.0/gcc-14.2.0.tar.xz
+          sudo tar -xf gcc-14.2.0.tar.xz
+      
+      - name: 应用补丁
+        run: |
+          cd /opt/gcc-14.2.0
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          PATCH_DIR=/opt/winlator-wcp/gcc-libs
+          sudo sed -i "s|@TERMUX_PREFIX@|${PREFIX}|g" ${PATCH_DIR}/set_glibc_dynamic_linker.patch
+          sudo patch -p1 < ${PATCH_DIR}/set_glibc_dynamic_linker.patch || \
+            sudo find gcc/config -name "*.h" -exec sudo sed -i 's|/lib/ld-linux-aarch64|/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64|g' {} \;
+          sudo sed -i 's@\./fixinc\.sh@-c true@' gcc/Makefile.in
+          sudo sed -i '/m64=/s/lib64/lib/' gcc/config/i386/t-linux64
+          sudo sed -i '/lp64=/s/lib64/lib/' gcc/config/aarch64/t-aarch64-linux
+          echo "14.2.0" | sudo tee gcc/BASE-VER
+          echo "" | sudo tee gcc/DEV-PHASE
+      
+      - name: 配置 GCC-Libs
+        run: |
+          cd /opt/gcc-14.2.0
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          sudo mkdir build && cd build
+          sudo ../configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --target=aarch64-linux-gnu \
+            --prefix=${PREFIX} \
+            --libdir=${PREFIX}/lib \
+            --libexecdir=${PREFIX}/lib \
+            --enable-languages=c,c++ \
+            --with-arch=armv8-a \
+            --disable-multilib \
+            --disable-bootstrap \
+            --disable-nls \
+            --disable-plugin \
+            --enable-default-pie \
+            --enable-default-ssp \
+            --enable-__cxa_atexit \
+            --disable-werror \
+            --disable-checking \
+            --disable-libssp \
+            --disable-libstdcxx-pch \
+            --with-linker-hash-style=gnu \
+            --with-system-zlib \
+            LD_FOR_TARGET=aarch64-linux-gnu-ld
+      
+      - name: 编译安装 GCC-Libs
+        run: |
+          cd /opt/gcc-14.2.0/build
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 上传 GCC-Libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcc-libs-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-zlib:
+    name: 构建 Zlib
+    runs-on: ubuntu-24.04
+    needs: build-gcc-libs
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: gcc-libs-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 下载 Zlib 源码
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz
+          sudo tar -xzf zlib-1.3.1.tar.gz
+      
+      - name: 配置编译 Zlib
+        run: |
+          cd /opt/zlib-1.3.1
+          export CC=aarch64-linux-gnu-gcc
+          export AR=aarch64-linux-gnu-ar
+          export RANLIB=aarch64-linux-gnu-ranlib
+          sudo ./configure --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install DESTDIR=$PWD/package
+          sudo tar -czf /opt/build/zlib.tar.gz -C package .
+      
+      - name: 上传 Zlib
+        uses: actions/upload-artifact@v4
+        with:
+          name: zlib-package
+          path: /opt/build/zlib.tar.gz
+          retention-days: 1
+
+  build-basic-libraries:
+    name: 构建基础库
+    runs-on: ubuntu-24.04
+    needs: build-zlib
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: zlib-package
+          path: /opt/build
+      
+      - name: 解压之前的构建
+        run: |
+          cd /opt/build
+          for pkg in glibc gcc-libs zlib; do
+            if [ -f "${pkg}.tar.gz" ]; then
+              sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+              sudo tar -xzf ${pkg}.tar.gz -C /data/data/com.winlator/files/imagefs/usr 2>/dev/null || true
+            fi
+          done
+      
+      - name: 构建 libffi
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/libffi/libffi/releases/download/v3.4.7/libffi-3.4.7.tar.gz
+          sudo tar xf libffi-3.4.7.tar.gz
+          cd libffi-3.4.7
+          sudo ./configure \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --disable-multi-os-directory \
+            --disable-exec-static-tramp \
+            --enable-pax_emutramp
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 ncurses
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz
+          sudo tar -xzf ncurses-6.5.tar.gz
+          cd ncurses-6.5
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-root-access \
+            --disable-root-environ \
+            --disable-setuid-environ \
+            --enable-widec \
+            --enable-pc-files \
+            --with-shared \
+            --with-cxx-binding \
+            --with-versioned-syms \
+            --with-pkg-config-libdir=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig \
+            --with-xterm-kbs=del \
+            --without-ada \
+            --without-strip \
+            --mandir=/data/data/com.winlator/files/imagefs/usr/share/man
+          sudo make -j$(nproc)
+          sudo make install
+          sudo sed -i 's/^INSTALL_PROG\s*=.*/INSTALL_PROG = $(INSTALL)/' progs/Makefile
+          
+          DEST=/data/data/com.winlator/files/imagefs
+          PREF=$DEST/usr
+          for lib in ncurses ncurses++ form panel menu; do
+            printf "INPUT(-l%sw)\n" "${lib}" | sudo tee $PREF/lib/lib${lib}.so
+            sudo ln -svf ${lib}w.pc $PREF/lib/pkgconfig/${lib}.pc
+          done
+          printf 'INPUT(-lncursesw)\n' | sudo tee $PREF/lib/libcursesw.so
+          sudo ln -svf libncurses.so $PREF/lib/libcurses.so
+          VER_MAJOR=6
+          for lib in tic tinfo; do
+            printf "INPUT(libncursesw.so.%s)\n" "$VER_MAJOR" | sudo tee $PREF/lib/lib${lib}.so
+            sudo ln -svf libncursesw.so.${VER_MAJOR} $PREF/lib/lib${lib}.so.${VER_MAJOR}
+            sudo ln -svf ncursesw.pc $PREF/lib/pkgconfig/${lib}.pc
+          done
+          sudo mkdir -p $PREF/include/ncurses
+          for i in $PREF/include/ncursesw/*; do
+            sudo mv ${i} $PREF/include/
+            sudo ln -s ../$(basename ${i}) $PREF/include/ncurses/
+            sudo ln -s ../$(basename ${i}) $PREF/include/ncursesw/
+          done
+      
+      - name: 构建 readline
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz
+          sudo tar -xzf readline-8.2.tar.gz
+          cd readline-8.2
+          PATCH_BASE="https://ftp.gnu.org/gnu/readline/readline-8.2-patches"
+          for num in 001 002 003 004 005 006 007 008 009 010 011 012 013; do
+            sudo wget -q "${PATCH_BASE}/readline82-${num}"
+            sudo patch -p0 < "readline82-${num}"
+          done
+          sudo sed -i 's|-Wl,-rpath,$(libdir) ||g' support/shobj-conf
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --with-curses \
+            CPPFLAGS="-I/data/data/com.winlator/files/imagefs/usr/include" \
+            LDFLAGS="-L/data/data/com.winlator/files/imagefs/usr/lib"
+          sudo make -j$(nproc) SHLIB_LIBS="-lncurses"
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 openssl
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/openssl/openssl/releases/download/openssl-3.4.1/openssl-3.4.1.tar.gz
+          sudo tar -xf openssl-3.4.1.tar.gz
+          cd openssl-3.4.1
+          sudo ./Configure linux-aarch64 \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --openssldir=/data/data/com.winlator/files/imagefs/usr/etc/ssl \
+            --libdir=/data/data/com.winlator/files/imagefs/usr/lib \
+            shared \
+            enable-ktls \
+            no-afalgeng
+          sudo sed -i 's/^CC=.*/CC= aarch64-linux-gnu-gcc/' Makefile
+          sudo sed -i 's/^AR=.*/AR= aarch64-linux-gnu-ar/' Makefile
+          sudo sed -i 's/^AS=.*/AS= aarch64-linux-gnu-as/' Makefile
+          sudo sed -i 's/^LD=.*/LD= aarch64-linux-gnu-ld/' Makefile
+          sudo sed -i 's/^NM=.*/NM= aarch64-linux-gnu-nm/' Makefile
+          sudo sed -i 's/^RANLIB=.*/RANLIB= aarch64-linux-gnu-ranlib/' Makefile
+          sudo sed -i 's/^STRIP=.*/STRIP= aarch64-linux-gnu-strip/' Makefile
+          sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=/' Makefile
+          sudo make depend
+          sudo make -j$(nproc)
+          sudo make install \
+            MANDIR=/data/data/com.winlator/files/imagefs/usr/share/man \
+            MANSUFFIX=ssl \
+            install_sw install_ssldirs install_man_docs
+      
+      - name: 上传基础库
+        uses: actions/upload-artifact@v4
+        with:
+          name: basic-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-compression-libraries:
+    name: 构建压缩库
+    runs-on: ubuntu-24.04
+    needs: build-basic-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: basic-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libbz2
+        run: |
+          cd /opt
+          sudo wget -q https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
+          sudo tar -xzf bzip2-1.0.8.tar.gz
+          cd bzip2-1.0.8
+          sudo make -f Makefile-libbz2_so CC=aarch64-linux-gnu-gcc
+          sudo make install PREFIX=/data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 liblzma
+        run: |
+          cd /opt
+          sudo wget -q https://tukaani.org/xz/xz-5.6.3.tar.gz
+          sudo tar -xzf xz-5.6.3.tar.gz
+          cd xz-5.6.3
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 liblz4
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/lz4/lz4/releases/download/v1.10.0/lz4-1.10.0.tar.gz
+          sudo tar -xzf lz4-1.10.0.tar.gz
+          cd lz4-1.10.0
+          sudo make -j$(nproc) CC=aarch64-linux-gnu-gcc PREFIX=/data/data/com.winlator/files/imagefs/usr DESTDIR=$PWD/package install
+          sudo tar -czf /opt/build/liblz4.tar.gz -C package .
+      
+      - name: 构建 zstd
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz
+          sudo tar -xzf zstd-1.5.7.tar.gz
+          cd zstd-1.5.7
+          sudo make -j$(nproc) CC=aarch64-linux-gnu-gcc PREFIX=/data/data/com.winlator/files/imagefs/usr DESTDIR=$PWD/package install
+          sudo tar -czf /opt/build/zstd.tar.gz -C package .
+      
+      - name: 构建 brotli
+        run: |
+          cd /opt
+          sudo git clone https://github.com/google/brotli.git
+          cd brotli
+          sudo mkdir build && cd build
+          sudo cmake .. -DCMAKE_TOOLCHAIN_FILE=/opt/build/toolchain-aarch64.cmake \
+            -DCMAKE_INSTALL_PREFIX=/data/data/com.winlator/files/imagefs/usr \
+            -DBUILD_SHARED_LIBS=ON
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 上传压缩库
+        uses: actions/upload-artifact@v4
+        with:
+          name: compression-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-crypto-libraries:
+    name: 构建加密库
+    runs-on: ubuntu-24.04
+    needs: build-compression-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: compression-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libgmp
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz
+          sudo tar -xf gmp-6.3.0.tar.xz
+          cd gmp-6.3.0
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-cxx
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libmpfr
+        run: |
+          cd /opt
+          sudo wget -q https://www.mpfr.org/mpfr-4.2.2/mpfr-4.2.2.tar.xz
+          sudo tar -xf mpfr-4.2.2.tar.xz
+          cd mpfr-4.2.2
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --with-gmp=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libmpc
+        run: |
+          cd /opt
+          sudo wget -q https://www.multiprecision.org/mpc/download/mpc-1.3.1.tar.gz
+          sudo tar -xzf mpc-1.3.1.tar.gz
+          cd mpc-1.3.1
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --with-gmp=/data/data/com.winlator/files/imagefs/usr \
+            --with-mpfr=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libgpg-error
+        run: |
+          cd /opt
+          sudo wget -q https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.50.tar.bz2
+          sudo tar -xjf libgpg-error-1.50.tar.bz2
+          cd libgpg-error-1.50
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libgcrypt
+        run: |
+          cd /opt
+          sudo wget -q https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.10.3.tar.bz2
+          sudo tar -xjf libgcrypt-1.10.3.tar.bz2
+          cd libgcrypt-1.10.3
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --with-gpg-error-prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传加密库
+        uses: actions/upload-artifact@v4
+        with:
+          name: crypto-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-text-libraries:
+    name: 构建文本处理库
+    runs-on: ubuntu-24.04
+    needs: build-crypto-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: crypto-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libiconv
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz
+          sudo tar -xzf libiconv-1.18.tar.gz
+          cd libiconv-1.18
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --bindir=/data/data/com.winlator/files/imagefs/usr/bin/libiconv-d \
+            --includedir=/data/data/com.winlator/files/imagefs/usr/include/libiconv-d \
+            --enable-extra-encodings
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+          cd /data/data/com.winlator/files/imagefs/usr
+          sudo mv bin/libiconv-d/iconv bin/libiconv-d/libiconv 2>/dev/null || true
+          sudo mv bin/libiconv-d/libiconv bin/ 2>/dev/null || true
+          sudo rm -rf bin/libiconv-d
+          sudo mv include/libiconv-d/iconv.h include/libiconv-d/libiconv.h 2>/dev/null || true
+          sudo mv include/libiconv-d/* include/ 2>/dev/null || true
+          sudo rm -rf include/libiconv-d 2>/dev/null || true
+      
+      - name: 构建 libunistring
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/libunistring/libunistring-1.26.tar.xz
+          sudo tar -xf libunistring-1.26.tar.xz
+          cd libunistring-1.26
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libidn2
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/libidn/libidn2-2.3.7.tar.gz
+          sudo tar -xzf libidn2-2.3.7.tar.gz
+          cd libidn2-2.3.7
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --with-libunistring-prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libpsl
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/rockdaboot/libpsl/releases/download/0.21.5/libpsl-0.21.5.tar.gz
+          sudo tar -xzf libpsl-0.21.5.tar.gz
+          cd libpsl-0.21.5
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-runtime=libidn2 \
+            --enable-builtin=libidn2
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传文本处理库
+        uses: actions/upload-artifact@v4
+        with:
+          name: text-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-network-libraries:
+    name: 构建网络库
+    runs-on: ubuntu-24.04
+    needs: build-text-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: text-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libnghttp2
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/nghttp2/nghttp2/releases/download/v1.63.0/nghttp2-1.63.0.tar.xz
+          sudo tar -xf nghttp2-1.63.0.tar.xz
+          cd nghttp2-1.63.0
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-http3
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libssh2
+        run: |
+          cd /opt
+          sudo wget -q https://www.libssh2.org/download/libssh2-1.11.1.tar.gz
+          sudo tar -xzf libssh2-1.11.1.tar.gz
+          cd libssh2-1.11.1
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --with-openssl=/data/data/com.winlator/files/imagefs/usr \
+            --with-libz=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libcurl
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/curl/curl/releases/download/curl-8_12_1/curl-8.12.1.tar.xz
+          sudo tar -xf curl-8.12.1.tar.xz
+          cd curl-8.12.1
+          sudo sed -i 's/cross_compiling=no/cross_compiling=yes/' configure
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --with-openssl \
+            --with-nghttp2 \
+            --with-zlib \
+            --with-libssh2 \
+            --with-brotli \
+            --with-libpsl \
+            --without-gssapi \
+            --disable-ldap \
+            --disable-ldaps \
+            --enable-ipv6 \
+            --with-ca-bundle=/data/data/com.winlator/files/imagefs/usr/etc/ssl/certs/ca-certificates.crt \
+            --with-ca-path=/data/data/com.winlator/files/imagefs/usr/etc/ssl/certs
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传网络库
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-xml-libraries:
+    name: 构建 XML 库
+    runs-on: ubuntu-24.04
+    needs: build-network-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: network-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libxml2
+        run: |
+          cd /opt
+          sudo wget -q https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.6.tar.xz
+          sudo tar -xf libxml2-2.13.6.tar.xz
+          cd libxml2-2.13.6
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --with-zlib=/data/data/com.winlator/files/imagefs/usr \
+            --with-lzma=/data/data/com.winlator/files/imagefs/usr \
+            --with-iconv=/data/data/com.winlator/files/imagefs/usr \
+            --without-icu \
+            --with-history \
+            --with-threads \
+            --without-python
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libxslt
+        run: |
+          cd /opt
+          sudo wget -q https://download.gnome.org/sources/libxslt/1.1.42/libxslt-1.1.42.tar.xz
+          sudo tar -xf libxslt-1.1.42.tar.xz
+          cd libxslt-1.1.42
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --with-libxml-prefix=/data/data/com.winlator/files/imagefs/usr \
+            --without-python
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传 XML 库
+        uses: actions/upload-artifact@v4
+        with:
+          name: xml-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-x11-core:
+    name: 构建 X11 核心库
+    runs-on: ubuntu-24.04
+    needs: build-xml-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: xml-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 安装 Python 包
+        run: |
+          sudo pip3 install mako jinja2
+
+      - name: 构建 xorgproto
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/proto/xorgproto.git
+          cd xorgproto
+          sudo meson setup builddir --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 libXau
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXau-1.0.11.tar.xz
+          sudo tar -xf libXau-1.0.11.tar.xz
+          cd libXau-1.0.11
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXdmcp
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXdmcp-1.1.5.tar.xz
+          sudo tar -xf libXdmcp-1.1.5.tar.xz
+          cd libXdmcp-1.1.5
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 xcb-proto
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/proto/xcb-proto.git
+          cd xcb-proto
+          sudo python3 ./setup.py install --prefix=/data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libxcb
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libxcb-1.17.0.tar.xz
+          sudo tar -xf libxcb-1.17.0.tar.xz
+          cd libxcb-1.17.0
+          sudo sed -i 's|/tmp/.X11-unix/X|/data/data/com.winlator/files/imagefs/tmp/.X11-unix/X|g' src/xcb_util.c
+          export PYTHONPATH=/data/data/com.winlator/files/imagefs/usr/lib/python3/dist-packages:$PYTHONPATH
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-xinput \
+            --enable-xkb \
+            CPPFLAGS="-I/data/data/com.winlator/files/imagefs/usr/include" \
+            LDFLAGS="-L/data/data/com.winlator/files/imagefs/usr/lib"
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 xtrans
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/xtrans.git
+          cd xtrans
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 上传 X11 核心库
+        uses: actions/upload-artifact@v4
+        with:
+          name: x11-core-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-x11-libraries:
+    name: 构建 X11 库
+    runs-on: ubuntu-24.04
+    needs: build-x11-core
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: x11-core-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libX11
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.10.tar.xz
+          sudo tar -xf libX11-1.8.10.tar.xz
+          cd libX11-1.8.10
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-loadable-i18n \
+            --enable-loadable-je
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXext
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXext-1.3.6.tar.xz
+          sudo tar -xf libXext-1.3.6.tar.xz
+          cd libXext-1.3.6
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXrender
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXrender-0.9.11.tar.xz
+          sudo tar -xf libXrender-0.9.11.tar.xz
+          cd libXrender-0.9.11
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXfixes
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXfixes-6.0.1.tar.xz
+          sudo tar -xf libXfixes-6.0.1.tar.xz
+          cd libXfixes-6.0.1
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXi
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXi-1.8.2.tar.xz
+          sudo tar -xf libXi-1.8.2.tar.xz
+          cd libXi-1.8.2
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXrandr
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXrandr-1.5.4.tar.xz
+          sudo tar -xf libXrandr-1.5.4.tar.xz
+          cd libXrandr-1.5.4
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXcursor
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXcursor-1.2.2.tar.xz
+          sudo tar -xf libXcursor-1.2.2.tar.xz
+          cd libXcursor-1.2.2
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXinerama
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXinerama-1.1.5.tar.xz
+          sudo tar -xf libXinerama-1.1.5.tar.xz
+          cd libXinerama-1.1.5
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXcomposite
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXcomposite-0.4.6.tar.xz
+          sudo tar -xf libXcomposite-0.4.6.tar.xz
+          cd libXcomposite-0.4.6
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传 X11 库
+        uses: actions/upload-artifact@v4
+        with:
+          name: x11-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-x11-extended:
+    name: 构建 X11 扩展库
+    runs-on: ubuntu-24.04
+    needs: build-x11-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: x11-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libpciaccess
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/libpciaccess.git
+          cd libpciaccess
+          sudo meson setup builddir --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --cross-file=/opt/build/cross-aarch64.txt || \
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libdrm
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/mesa/drm.git
+          cd drm
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 vulkan-headers
+        run: |
+          cd /opt
+          sudo git clone https://github.com/KhronosGroup/Vulkan-Headers.git
+          cd Vulkan-Headers
+          sudo meson setup builddir --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 vulkan-icd-loader
+        run: |
+          cd /opt
+          sudo git clone https://github.com/KhronosGroup/Vulkan-Loader.git
+          cd Vulkan-Loader
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 SPIRV-Headers
+        run: |
+          cd /opt
+          sudo git clone https://github.com/KhronosGroup/SPIRV-Headers.git
+          cd SPIRV-Headers
+          sudo cmake -B build -DCMAKE_INSTALL_PREFIX=/data/data/com.winlator/files/imagefs/usr
+          sudo cmake --build build
+          sudo cmake --install build
+      
+      - name: 构建 SPIRV-Tools
+        run: |
+          cd /opt
+          sudo git clone https://github.com/KhronosGroup/SPIRV-Tools.git
+          cd SPIRV-Tools
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE=/opt/build/cross-aarch64.txt \
+            -DCMAKE_INSTALL_PREFIX=/data/data/com.winlator/files/imagefs/usr \
+            -DSPIRV_HEADERS_INSTALL_DIR=/data/data/com.winlator/files/imagefs/usr \
+            -DSPIRV_SKIP_TESTS=ON
+          sudo cmake --build build
+          sudo cmake --install build
+      
+      - name: 上传 X11 扩展库
+        uses: actions/upload-artifact@v4
+        with:
+          name: x11-extended-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-font-libraries:
+    name: 构建字体库
+    runs-on: ubuntu-24.04
+    needs: build-x11-extended
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: x11-extended-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 freetype
+        run: |
+          cd /opt
+          sudo wget -q https://downloads.sourceforge.net/freetype/freetype-2.13.3.tar.xz
+          sudo tar -xf freetype-2.13.3.tar.xz
+          cd freetype-2.13.3
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 libexpat
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/libexpat/libexpat/releases/download/R_2_6_4/expat-2.6.4.tar.xz
+          sudo tar -xf expat-2.6.4.tar.xz
+          cd expat-2.6.4
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 fontconfig
+        run: |
+          cd /opt
+          sudo wget -q https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/2.15.0/fontconfig-2.15.0.tar.gz
+          sudo tar -xzf fontconfig-2.15.0.tar.gz
+          cd fontconfig-2.15.0
+          cat > fcatomic.patch << 'EOF'
+--- a/src/fcatomic.c
++++ b/src/fcatomic.c
+@@ -130,15 +130,12 @@
+ 	unlink ((char *) atomic->tmp);
+ 	return FcFalse;
+     }
+-    ret = link ((char *) atomic->tmp, (char *) atomic->lck);
+-    if (ret < 0 && (errno == EPERM || errno == ENOTSUP || errno == EACCES))
+-    {
+
+ 	/* the filesystem where atomic->lck points to may not supports
+ 	 * the hard link. so better try to fallback
+ 	 */
+ 	ret = mkdir ((char *) atomic->lck, 0600);
+ 	no_link = FcTrue;
+-    }
+     (void) unlink ((char *) atomic->tmp);
+ #else
+     ret = mkdir ((char *) atomic->lck, 0600);
+EOF
+          sudo patch -p1 < fcatomic.patch
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault-fonts-dirs=/system/fonts,/data/data/com.winlator/files/imagefs/usr/share/fonts \
+            -Ddefault-hinting=slight \
+            -Ddefault-sub-pixel-rendering=rgb \
+            -Ddoc-html=disabled \
+            -Ddoc-pdf=disabled \
+            -Ddoc-txt=disabled
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 上传字体库
+        uses: actions/upload-artifact@v4
+        with:
+          name: font-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-glib-gio:
+    name: 构建 GLib/GIO
+    runs-on: ubuntu-24.04
+    needs: build-font-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: font-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 pcre2
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/PhilipHazel/pcre2/releases/download/pcre2-10.45/pcre2-10.45.tar.bz2
+          sudo tar -xf pcre2-10.45.tar.bz2
+          cd pcre2-10.45
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-pcre2-16 \
+            --enable-pcre2-32 \
+            --enable-jit \
+            --enable-pcre2grep-libz \
+            --enable-pcre2grep-libbz2 \
+            --enable-pcre2grep-libreadline \
+            --enable-malloc0returnsnull=no \
+            CPPFLAGS="-I/data/data/com.winlator/files/imagefs/usr/include" \
+            LDFLAGS="-L/data/data/com.winlator/files/imagefs/usr/lib"
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 glib
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnome.org/pub/gnome/sources/glib/2.82/glib-2.82.2.tar.xz
+          sudo tar -xf glib-2.82.2.tar.xz
+          cd glib-2.82.2
+          
+          # 应用补丁
+          sudo sed -i 's|"/usr/share/locale/locale.alias"|"/data/data/com.winlator/files/imagefs/usr/share/locale/locale.alias"|' glib/gcharset.c
+          sudo sed -i 's|"/bin:/usr/bin:."|"/data/data/com.winlator/files/imagefs/usr/bin:."|' glib/gspawn-posix.c
+          sudo sed -i 's|"/bin/sh"|"/data/data/com.winlator/files/imagefs/usr/bin/sh"|' glib/gspawn-posix.c
+          sudo sed -i 's|"/bin:/usr/bin:."|"/data/data/com.winlator/files/imagefs/usr/bin:."|' glib/gutils.c
+          sudo sed -i 's|"/tmp"|"/data/data/com.winlator/files/imagefs/tmp"|' glib/gutils.c
+          sudo sed -i 's|"/etc/os-release", "/usr/lib/os-release"|"/data/data/com.winlator/files/imagefs/usr/etc/os-release", "/data/data/com.winlator/files/imagefs/usr/lib/os-release"|' glib/gutils.c
+          sudo sed -i 's|"/usr/local/share/:/usr/share/"|"/data/data/com.winlator/files/imagefs/usr/local/share/:/data/data/com.winlator/files/imagefs/usr/share/"|' glib/gutils.c
+          sudo sed -i 's|"/etc/machine-id"|"/data/data/com.winlator/files/imagefs/usr/etc/machine-id"|' gio/gdbusprivate.c
+          sudo sed -i 's|"/etc/glib-2.0/settings"|"/data/data/com.winlator/files/imagefs/usr/etc/glib-2.0/settings"|' gio/gkeyfilesettingsbackend.c
+          sudo sed -i 's|"/etc/resolv.conf"|"/data/data/com.winlator/files/imagefs/usr/etc/resolv.conf"|' gio/gnetworking.h.in
+          sudo sed -i 's|"/usr/local/share/:/usr/share/"|"/data/data/com.winlator/files/imagefs/usr/local/share/:/data/data/com.winlator/files/imagefs/usr/share/"|' gio/xdgmime/xdgmime.c
+          
+          # 移除 pidfd_open 检测
+          sudo sed -i '/^# Check for pidfd_open/,/^endif$/d' meson.build
+          
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=both \
+            -Druntime_dir=/data/data/com.winlator/files/imagefs/usr/var/run \
+            -Dglib_debug=disabled \
+            -Dselinux=disabled \
+            -Dlibmount=disabled \
+            -Dtests=false \
+            -Ddocumentation=false \
+            -Dman-pages=false \
+            -Dintrospection=disabled
+          
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 上传 GLib/GIO
+        uses: actions/upload-artifact@v4
+        with:
+          name: glib-gio-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-cairo-pango:
+    name: 构建 Cairo/Pango
+    runs-on: ubuntu-24.04
+    needs: build-glib-gio
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: glib-gio-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libpixman
+        run: |
+          cd /opt
+          sudo wget -q https://cairographics.org/releases/pixman-0.44.2.tar.gz
+          sudo tar -xzf pixman-0.44.2.tar.gz
+          cd pixman-0.44.2
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Dloongson-mmi=disabled \
+            -Dvmx=disabled \
+            -Darm-simd=disabled \
+            -Dneon=disabled \
+            -Da64-neon=disabled \
+            -Drvv=disabled \
+            -Dmmx=disabled \
+            -Dsse2=disabled \
+            -Dssse3=disabled \
+            -Dmips-dspr2=disabled \
+            -Dgtk=disabled \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 libcairo
+        run: |
+          cd /opt
+          sudo wget -q https://gitlab.freedesktop.org/cairo/cairo/-/archive/1.18.2/cairo-1.18.2.tar.bz2
+          sudo tar -xf cairo-1.18.2.tar.bz2
+          cd cairo-1.18.2
+          sudo sed -i 's|char template\[\] = "/tmp/csi-font.XXXXXX";|char template[] = "/data/data/com.winlator/files/imagefs/tmp/csi-font.XXXXXX";|' util/cairo-script/cairo-script-operators.c
+          sudo sed -i 's|ctx = DLCALL (cairo_script_create, "/tmp/fdr.trace");|ctx = DLCALL (cairo_script_create, "/data/data/com.winlator/files/imagefs/tmp/fdr.trace");|' util/cairo-fdr/fdr.c
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddwrite=disabled \
+            -Dspectre=disabled \
+            -Dsymbol-lookup=disabled \
+            -Dtests=disabled \
+            -Dfontconfig=enabled \
+            -Dfreetype=enabled \
+            -Dglib=enabled \
+            -Dpng=enabled \
+            -Dxlib=enabled \
+            -Dxcb=enabled \
+            -Dtee=enabled \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 fribidi
+        run: |
+          cd /opt
+          sudo git clone https://github.com/fribidi/fribidi.git
+          cd fribidi
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 harfbuzz
+        run: |
+          cd /opt
+          sudo rm -rf harfbuzz-10.1.0
+          sudo wget -q https://github.com/harfbuzz/harfbuzz/archive/10.1.0.tar.gz -O harfbuzz-10.1.0.tar.gz
+          sudo tar -xzf harfbuzz-10.1.0.tar.gz
+          cd harfbuzz-10.1.0
+          sudo sed -i "s/'cpp_std=c++11'/'cpp_std=c++17'/" meson.build
+          sudo sed -i "s/get_option('cpp_std') == 'c++11'/get_option('cpp_std') == 'c++17'/g" meson.build
+          sudo sed -i '/^#include <assert.h>$/d' util/ansi-print.hh
+          sudo sed -i '/^#include <assert.h>$/d' util/options.hh
+          sudo sed -i '384,386s/^/\/\//' /data/data/com.winlator/files/imagefs/usr/include/inttypes.h
+          sudo sed -i '387,389s/^/\/\//' /data/data/com.winlator/files/imagefs/usr/include/inttypes.h
+          sudo sed -i '390,393s/^/\/\//' /data/data/com.winlator/files/imagefs/usr/include/inttypes.h
+          sudo sed -i '394,397s/^/\/\//' /data/data/com.winlator/files/imagefs/usr/include/inttypes.h
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[properties]
+c_args = ['-O2', '-pipe', '-Wno-error=redundant-decls']
+cpp_args = ['-O2', '-pipe', '-Wno-error=redundant-decls']
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR="/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig"
+          export PKG_CONFIG_SYSROOT_DIR="/data/data/com.winlator/files/imagefs"
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddocs=disabled \
+            -Dglib=enabled \
+            -Dgobject=enabled \
+            -Dcairo=enabled \
+            -Dfreetype=enabled \
+            -Dgraphite2=disabled \
+            -Dicu=disabled \
+            -Dintrospection=disabled
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 libdatrie
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/tlwg/libdatrie/releases/download/v0.2.12/libdatrie-0.2.12.tar.xz
+          sudo tar -xf libdatrie-0.2.12.tar.xz
+          cd libdatrie-0.2.12
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXft
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXft-2.3.8.tar.bz2
+          sudo tar -xjf libXft-2.3.8.tar.bz2
+          cd libXft-2.3.8
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libthai
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/tlwg/libthai/releases/download/v0.1.29/libthai-0.1.29.tar.gz
+          sudo tar -xzf libthai-0.1.29.tar.gz
+          cd libthai-0.1.29
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --with-datrie-prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 pango
+        run: |
+          cd /opt
+          sudo wget -q https://gitlab.gnome.org/GNOME/pango/-/archive/1.54.0/pango-1.54.0.tar.gz
+          sudo tar -xzf pango-1.54.0.tar.gz
+          cd pango-1.54.0
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'aarch64-linux-gnu-pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true
+EOF
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Dintrospection=disabled \
+            -Dgtk_doc=false
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 上传 Cairo/Pango
+        uses: actions/upload-artifact@v4
+        with:
+          name: cairo-pango-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-image-libraries:
+    name: 构建图像库
+    runs-on: ubuntu-24.04
+    needs: build-cairo-pango
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: cairo-pango-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libXxf86vm
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXxf86vm-1.1.5.tar.xz
+          sudo tar -xf libXxf86vm-1.1.5.tar.xz
+          cd libXxf86vm-1.1.5
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libxshmfence
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/libxshmfence.git
+          cd libxshmfence
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 libjpeg-turbo
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.0/libjpeg-turbo-3.1.0.tar.gz
+          sudo tar -xzf libjpeg-turbo-3.1.0.tar.gz
+          cd libjpeg-turbo-3.1.0
+          cat > toolchain-aarch64.cmake << 'EOF'
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR aarch64)
+set(CMAKE_SYSROOT /data/data/com.winlator/files/imagefs)
+set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+set(CMAKE_FIND_ROOT_PATH /data/data/com.winlator/files/imagefs/usr)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+EOF
+          sudo cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE=toolchain-aarch64.cmake \
+            -DCMAKE_INSTALL_PREFIX=/data/data/com.winlator/files/imagefs/usr \
+            -DENABLE_SHARED=ON \
+            -DENABLE_STATIC=OFF \
+            -DWITH_JPEG8=ON
+          sudo cmake --build build --parallel $(nproc)
+          sudo cmake --install build
+      
+      - name: 构建 giflib
+        run: |
+          cd /opt
+          sudo wget -q https://sourceforge.net/projects/giflib/files/giflib-5.2.2.tar.gz
+          sudo tar -xzf giflib-5.2.2.tar.gz
+          cd giflib-5.2.2
+          sudo sed -i 's/^PREFIX = \/usr\/local/PREFIX ?= \/usr\/local/' Makefile
+          sudo sed -i 's/^all: allhtml manpages/all: manpages/' doc/Makefile
+          sudo make -j$(nproc) \
+            CC=aarch64-linux-gnu-gcc \
+            AR=aarch64-linux-gnu-ar \
+            RANLIB=aarch64-linux-gnu-ranlib \
+            PREFIX=/data/data/com.winlator/files/imagefs/usr
+          sudo make install \
+            PREFIX=/data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 jbigkit
+        run: |
+          cd /opt
+          sudo wget -q https://sourceforge.net/projects/jbigkit/files/jbigkit-2.1.tar.gz
+          sudo tar -xzf jbigkit-2.1.tar.gz
+          cd jbigkit-2.1
+          sudo make CC=aarch64-linux-gnu-gcc AR=aarch64-linux-gnu-ar RANLIB=aarch64-linux-gnu-ranlib
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr/include /data/data/com.winlator/files/imagefs/usr/lib
+          sudo cp lib/*.h /data/data/com.winlator/files/imagefs/usr/include/
+          sudo cp lib/*.a /data/data/com.winlator/files/imagefs/usr/lib/
+          sudo cp lib/*.so* /data/data/com.winlator/files/imagefs/usr/lib/ 2>/dev/null || true
+      
+      - name: 构建 libtiff
+        run: |
+          cd /opt
+          sudo wget -q https://download.osgeo.org/libtiff/tiff-4.7.0.tar.xz
+          sudo tar -xf tiff-4.7.0.tar.xz
+          cd tiff-4.7.0
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-ld-version-script
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传图像库
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-audio-libraries:
+    name: 构建音频库
+    runs-on: ubuntu-24.04
+    needs: build-image-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: image-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libogg
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/xiph/ogg/releases/download/v1.3.5/libogg-1.3.5.tar.gz
+          sudo tar -xzf libogg-1.3.5.tar.gz
+          cd libogg-1.3.5
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libvorbis
+        run: |
+          cd /opt
+          sudo wget -q http://downloads.xiph.org/releases/vorbis/libvorbis-1.3.7.tar.xz
+          sudo tar -xf libvorbis-1.3.7.tar.xz
+          cd libvorbis-1.3.7
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libflac
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/xiph/flac/releases/download/1.4.3/flac-1.4.3.tar.xz
+          sudo tar -xf flac-1.4.3.tar.xz
+          cd flac-1.4.3
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 libopus
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/xiph/opus/releases/download/v1.5.2/opus-1.5.2.tar.gz
+          sudo tar -xzf opus-1.5.2.tar.gz
+          cd opus-1.5.2
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libmp3lame
+        run: |
+          cd /opt
+          sudo wget -q https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz
+          sudo tar -xzf lame-3.100.tar.gz
+          cd lame-3.100
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --enable-shared \
+            --disable-decoder
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libmpg123
+        run: |
+          cd /opt
+          sudo wget -q https://sourceforge.net/projects/mpg123/files/mpg123/1.32.10/mpg123-1.32.10.tar.bz2
+          sudo tar -xjf mpg123-1.32.10.tar.bz2
+          cd mpg123-1.32.10
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static \
+            --disable-int-quality
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libsndfile
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/libsndfile/libsndfile/releases/download/1.2.2/libsndfile-1.2.2.tar.xz
+          sudo tar -xf libsndfile-1.2.2.tar.xz
+          cd libsndfile-1.2.2
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 alsa-lib
+        run: |
+          cd /opt
+          sudo wget -q https://www.alsa-project.org/files/pub/lib/alsa-lib-1.2.13.tar.bz2
+          sudo tar -xf alsa-lib-1.2.13.tar.bz2
+          cd alsa-lib-1.2.13
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --with-tmpdir=/data/data/com.winlator/files/imagefs/tmp \
+            --disable-static \
+            --enable-malloc0returnsnull=no
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传音频库
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-opengl-libraries:
+    name: 构建 OpenGL 库
+    runs-on: ubuntu-24.04
+    needs: build-audio-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: audio-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libglvnd
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/mesa/libglvnd.git
+          cd libglvnd
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 libepoxy
+        run: |
+          cd /opt
+          sudo git clone https://github.com/torvalds/libepoxy.git
+          cd libepoxy
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddefault_library=shared
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 上传 OpenGL 库
+        uses: actions/upload-artifact@v4
+        with:
+          name: opengl-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-wayland-keyboard:
+    name: 构建 Wayland 和键盘库
+    runs-on: ubuntu-24.04
+    needs: build-opengl-libraries
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+          sudo apt-get update
+          sudo apt-get install -y wayland-protocols libxml2-dev libexpat1-dev zlib1g-dev
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: opengl-libraries-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libwayland
+        run: |
+          cd /opt
+          sudo wget -q https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.23.1/downloads/wayland-1.23.1.tar.xz
+          sudo tar -xf wayland-1.23.1.tar.xz
+          cd wayland-1.23.1
+          cat > setdirs.patch << 'EOF'
+--- a/cursor/os-compatibility.c
++++ b/cursor/os-compatibility.c
+@@ -138,8 +138,7 @@
+ {
+ 	path = getenv("XDG_RUNTIME_DIR");
+ 	if (!path || path[0] != '/') {
+-		errno = ENOENT;
+-		return -1;
++		path = "/data/data/com.winlator/files/imagefs/tmp";
+ 	}
+ 
+ 	name_size = strlen(path) + sizeof(template);
+--- a/src/wayland-client.c
++++ b/src/wayland-client.c
+@@ -1109,11 +1109,7 @@
+ 
+ 	runtime_dir = getenv("XDG_RUNTIME_DIR");
+ 	if (((!runtime_dir || runtime_dir[0] != '/') && !path_is_absolute)) {
+-		wl_log("error: XDG_RUNTIME_DIR is invalid or not set in the environment.\n");
+-		/* to prevent programs reporting
+-		 * "failed to create display: Success" */
+-		errno = ENOENT;
+-		return -1;
++		runtime_dir = "/data/data/com.winlator/files/imagefs/tmp";
+ 	}
+ 
+ 	fd = wl_os_socket_cloexec(PF_LOCAL, SOCK_STREAM, 0);
+--- a/src/wayland-server.c
++++ b/src/wayland-server.c
+@@ -1629,13 +1629,7 @@
+ 	if (name[0] != '/') {
+ 		runtime_dir = getenv("XDG_RUNTIME_DIR");
+ 		if (!runtime_dir || runtime_dir[0] != '/') {
+-			wl_log("error: XDG_RUNTIME_DIR is invalid or not set in"
+-			       " the environment\n");
+-
+-			/* to prevent programs reporting
+-			 * "failed to add socket: Success" */
+-			errno = ENOENT;
+-			return -1;
++			runtime_dir = "/data/data/com.winlator/files/imagefs/tmp";
+ 		}
+ 		separator = "/";
+ 	}
+EOF
+          sudo patch -p1 < setdirs.patch
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'aarch64-linux-gnu-pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true
+EOF
+          cat > native.txt << 'EOF'
+[binaries]
+c = 'gcc'
+cpp = 'g++'
+ar = 'ar'
+strip = 'strip'
+pkgconfig = 'pkg-config'
+wayland-scanner = '/usr/bin/wayland-scanner'
+EOF
+          export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --native-file native.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddocumentation=false
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 xkeyboard-config
+        run: |
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/data/xkeyboard-config/xkeyboard-config-2.43.tar.xz
+          sudo tar -xf xkeyboard-config-2.43.tar.xz
+          cd xkeyboard-config-2.43
+          sudo meson setup builddir \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Dxkb-base=/data/data/com.winlator/files/imagefs/usr/share/X11/xkb \
+            -Dcompat-rules=true \
+            -Dxorg-rules-symlinks=true
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 构建 libxkbcommon
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.8.0.tar.gz -O libxkbcommon-1.8.0.tar.gz
+          sudo tar -xzf libxkbcommon-1.8.0.tar.gz
+          cd libxkbcommon-xkbcommon-1.8.0
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=/data/data/com.winlator/files/imagefs/usr/lib/pkgconfig:/data/data/com.winlator/files/imagefs/usr/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Denable-wayland=false \
+            -Denable-x11=true \
+            -Denable-docs=false
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+      
+      - name: 上传 Wayland 和键盘库
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayland-keyboard-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-x11-tools:
+    name: 构建 X11 工具库
+    runs-on: ubuntu-24.04
+    needs: build-wayland-keyboard
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: wayland-keyboard-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 libICE
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/libice.git
+          cd libice
+          sudo ./autogen.sh \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 util-linux
+        run: |
+          cd /opt
+          sudo git clone https://github.com/termux-pacman/glibc-packages.git termux-glibc 2>/dev/null || true
+          sudo wget -q https://github.com/util-linux/util-linux/archive/refs/tags/v2.40.2.tar.gz -O util-linux-2.40.2.tar.gz
+          sudo tar -xzf util-linux-2.40.2.tar.gz
+          cd util-linux-2.40.2
+          PATCH_FILE=/opt/glibc-packages/gpkg/util-linux/setdirs.patch
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          TMPDIR=/data/data/com.winlator/files/imagefs/tmp
+          if [ -f ${PATCH_FILE} ]; then
+            sudo sed -i "s|@TERMUX_PREFIX@|${PREFIX}|g" ${PATCH_FILE}
+            sudo sed -i "s|@TERMUX_PREFIX_CLASSICAL@|${TMPDIR}|g" ${PATCH_FILE}
+            sudo patch -p1 < ${PATCH_FILE}
+          fi
+          sudo ./autogen.sh
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=${PREFIX} \
+            --libdir=${PREFIX}/lib \
+            --libexecdir=${PREFIX}/lib \
+            --sysconfdir=${PREFIX}/etc \
+            --localstatedir=${PREFIX}/var \
+            --runstatedir=${PREFIX}/var/run \
+            --mandir=${PREFIX}/share/man \
+            --infodir=${PREFIX}/share/info \
+            --without-ncurses \
+            --without-ncursesw \
+            --without-tinfo \
+            --without-selinux \
+            --without-audit \
+            --without-udev \
+            --without-systemd \
+            --disable-bash-completion \
+            --disable-pylibmount \
+            --disable-makeinstall-chown \
+            --disable-makeinstall-setuid \
+            --disable-liblastlog2 \
+            --without-sqlite3 \
+            --disable-nls
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 libSM
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/libsm.git
+          cd libsm
+          sudo ./autogen.sh \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 libXt
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/libxt.git
+          cd libxt
+          sudo ./autogen.sh \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 libXmu
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/libxmu.git
+          cd libxmu
+          sudo ./autogen.sh \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 libXpm
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/xorg-proto/xorgproto/releases/download/2024.1/xorgproto-2024.1.tar.gz
+          sudo tar -xzf xorgproto-2024.1.tar.gz
+          cd /opt
+          sudo wget -q https://xorg.freedesktop.org/archive/individual/lib/libXpm-4.11.0.tar.xz
+          sudo tar -xf libXpm-4.11.0.tar.xz
+          cd libXpm-4.11.0
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --enable-shared \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 构建 libXaw
+        run: |
+          cd /opt
+          sudo git clone https://gitlab.freedesktop.org/xorg/lib/libXaw.git
+          cd libXaw
+          sudo ./autogen.sh \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 上传 X11 工具库
+        uses: actions/upload-artifact@v4
+        with:
+          name: x11-tools-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-dbus-pulse:
+    name: 构建 D-Bus 和 PulseAudio
+    runs-on: ubuntu-24.04
+    needs: build-x11-tools
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: x11-tools-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 dbus
+        run: |
+          cd /opt
+          sudo wget -q https://dbus.freedesktop.org/releases/dbus/dbus-1.15.6.tar.xz
+          sudo tar -xf dbus-1.15.6.tar.xz
+          cd dbus-1.15.6
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          TMPDIR=/data/data/com.winlator/files/imagefs/tmp
+          cat > dbus-sysdeps-unix.patch << 'EOF'
+--- a/dbus/dbus-sysdeps-unix.c
++++ b/dbus/dbus-sysdeps-unix.c
+@@ -3602,7 +3602,7 @@
+ 
+       /* And this is the sane fallback. */
+       if (tmpdir == NULL)
+-        tmpdir = "/tmp";
++        tmpdir = "/data/data/com.winlator/files/imagefs/tmp";
+     }
+ 
+   _DBUS_UNLOCK (sysdeps);
+EOF
+          sudo patch -p1 < dbus-sysdeps-unix.patch
+          export PKG_CONFIG_LIBDIR=${PREFIX}/lib/pkgconfig:${PREFIX}/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=${PREFIX} \
+            --libdir=${PREFIX}/lib \
+            --libexecdir=${PREFIX}/lib \
+            --sysconfdir=${PREFIX}/etc \
+            --localstatedir=${PREFIX}/var \
+            --runstatedir=${PREFIX}/var/run \
+            --disable-libaudit \
+            --disable-systemd \
+            --disable-tests \
+            --disable-xml-docs \
+            --enable-inotify \
+            --enable-x11-autolaunch \
+            --with-test-socket-dir=${TMPDIR} \
+            --with-session-socket-dir=${TMPDIR} \
+            --with-x=auto \
+            --without-systemdsystemunitdir \
+            --disable-selinux
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 doxygen
+        run: |
+          cd /opt
+          sudo wget -q https://doxygen.nl/files/doxygen-1.12.0.src.tar.gz
+          sudo tar -xzf doxygen-1.12.0.src.tar.gz
+          cd doxygen-1.12.0
+          sudo mkdir build && cd build
+          sudo cmake .. -DCMAKE_INSTALL_PREFIX=/data/data/com.winlator/files/imagefs/usr
+          sudo make -j$(nproc)
+          sudo make install
+      
+      - name: 构建 libpulse
+        run: |
+          cd /opt
+          sudo git clone https://github.com/pulseaudio/pulseaudio.git
+          cd pulseaudio
+          sudo git checkout v17.0
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          TMPDIR=/data/data/com.winlator/files/imagefs/tmp
+          PATCH_DIR=/opt/glibc-packages/gpkg/libpulse
+          if [ -f ${PATCH_DIR}/fix-paths.patch ]; then
+            sudo sed -i "s|@TERMUX_PREFIX@|${PREFIX}|g; s|@TERMUX_PREFIX_CLASSICAL@|${TMPDIR}|g" \
+              ${PATCH_DIR}/fix-paths.patch
+            sudo patch -p1 < ${PATCH_DIR}/fix-paths.patch
+          fi
+          cat > cross-aarch64.txt << 'EOF'
+[binaries]
+c = 'aarch64-linux-gnu-gcc'
+cpp = 'aarch64-linux-gnu-g++'
+ar = 'aarch64-linux-gnu-ar'
+strip = 'aarch64-linux-gnu-strip'
+pkgconfig = 'pkg-config'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+          export PKG_CONFIG_LIBDIR=${PREFIX}/lib/pkgconfig:${PREFIX}/share/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/data/data/com.winlator/files/imagefs
+          sudo meson setup builddir \
+            --cross-file cross-aarch64.txt \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            -Ddaemon=false \
+            -Dman=false \
+            -Dtests=false \
+            -Ddatabase=gdbm \
+            -Dx11=enabled \
+            -Ddbus=enabled \
+            -Dalsa=enabled \
+            -Ddoxygen=false
+          sudo meson compile -C builddir
+          sudo meson install -C builddir
+          if [ -f ${PATCH_DIR}/pulseaudio-start.sh ]; then
+            sudo install -m755 ${PATCH_DIR}/pulseaudio-start.sh ${PREFIX}/bin/pulseaudio-start
+            sudo sed -i -e "s|@TERMUX_PREFIX_CLASSICAL@|${TMPDIR}|g" \
+              -e "s|@TERMUX_PREFIX@|${PREFIX}|g" \
+              ${PREFIX}/bin/pulseaudio-start
+          fi
+      
+      - name: 构建 libunwind
+        run: |
+          cd /opt
+          sudo wget -q https://github.com/libunwind/libunwind/releases/download/v1.8.1/libunwind-1.8.1.tar.gz
+          sudo tar -xzf libunwind-1.8.1.tar.gz
+          cd libunwind-1.8.1
+          sudo ./configure \
+            --host=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
+            --prefix=/data/data/com.winlator/files/imagefs/usr \
+            --enable-cxx \
+            --disable-static
+          sudo make -j$(nproc)
+          sudo make install INSTALL_PROGRAM="/usr/bin/install -c"
+      
+      - name: 上传 D-Bus 和 PulseAudio
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbus-pulse-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
+  build-box64:
+    name: 构建 Box64
+    runs-on: ubuntu-24.04
+    needs: build-dbus-pulse
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: dbus-pulse-package
+          path: /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 构建 box64
+        run: |
+          cd /opt
+          sudo git clone https://github.com/ptitSeb/box64.git
+          cd box64
+          sudo mkdir build && cd build
+          export LDFLAGS="-s -Wl,--dynamic-linker=/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64.so.1 -Wl,-rpath=/data/data/com.winlator/files/imagefs/usr/lib"
+          sudo cmake .. \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DARM64=ON \
+            -DARM_DYNAREC=ON \
+            -DBAD_SIGNAL=ON \
+            -DWINLATOR_GLIBC=ON \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_CROSSCOMPILING=TRUE
+          sudo make -j$(nproc)
+          sudo make install DESTDIR=$PWD/package
+      
+      - name: 准备最终构建
+        run: |
+          cd /opt/box64/build/package
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr/bin
+          sudo cp -r . /data/data/com.winlator/files/imagefs/usr/
+      
+      - name: 上传完整构建
+        uses: actions/upload-artifact@v4
+        with:
+          name: winlator-glibc-complete
+          path: /data/data/com.winlator/files/imagefs
+          retention-days: 5
+
+  final-build:
+    name: 完成构建
+    runs-on: ubuntu-24.04
+    needs: build-box64
+    if: always()
+    
+    steps:
+      - name: 清理临时文件
+        run: |
+          sudo rm -rf /opt/build /opt/glibc-* /opt/gcc-* /opt/box64 2>/dev/null || true
+          echo "构建完成，临时文件已清理"
+      
+      - name: 总结
+        run: |
+          echo "=========================================="
+          echo "Winlator Glibc 交叉编译构建完成！"
+          echo "=========================================="
+          echo ""
+          echo "安装路径: /data/data/com.winlator/files/imagefs/usr"
+          echo "临时目录: /data/data/com.winlator/files/imagefs/tmp"
+          echo "系统根目录: /data/data/com.winlator/files/imagefs"
+          echo ""
+          echo "包含的核心库："
+          echo "  - Glibc 2.42"
+          echo "  - GCC-Libs 14.2.0"
+          echo "  - X11 完整库"
+          echo "  - Cairo/Pango"
+          echo "  - 音频/视频编解码库"
+          echo "  - OpenGL/Vulkan 支持"
+          echo "  - Box64 模拟器"
+          echo "=========================================="
