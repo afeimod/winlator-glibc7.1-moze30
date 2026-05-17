@@ -49,7 +49,6 @@ jobs:
             pkg-config meson ninja-build cmake \
             autoconf automake libtool \
             xz-utils bzip2 gzip \
-            crossbib i386libc6-dev-i386-cross \
             libc6-dev-arm64-cross linux-libc-dev-arm64-cross
 
       - name: 创建工作目录
