@@ -197,111 +197,110 @@ jobs:
       - name: 创建 disabled-syscall.h
         run: |
           cd /opt/glibc-2.42
-          sudo tee sysdeps/unix/sysv/linux/aarch64/disabled-syscall.h > /dev/null << 'EOF'
-            #define __NR_accept 202
-            #define __NR_faccessat2 439
-            #define __NR_fchmodat2 452
-            #define __NR_epoll_pwait2 441
-            #define __NR_statx 291
-            #define __NR_close_range 436
-            #define __NR_shmat 196
-            #define __NR_shmctl 195
-            #define __NR_shmdt 197
-            #define __NR_shmget 194
-            #define __NR_setuid 146
-            #define __NR_setgid 144
-            #define __NR_setreuid 145
-            #define __NR_setregid 143
-            #define __NR_setresuid 147
-            #define __NR_setresgid 149
-            #define __NR_setfsuid 151
-            #define __NR_setfsgid 152
-            #define __NR_clone3 435
-            #define __NR_futex_waitv 449
-            #define __NR_landlock_create_ruleset 444
-            #define __NR_pidfd_send_signal 424
-            #define __NR_rseq 293
-            #define __NR_set_robust_list 99
-            #define __NR_get_robust_list 100
-            #define __NR_io_uring_setup 425
-            #define __NR_io_uring_enter 426
-            #define __NR_io_uring_register 427
-            #define __NR_name_to_handle_at 264
-            #define __NR_open_by_handle_at 265
-            #define __NR_kcmp 272
-            #define __NR_mbind 235
-            #define __NR_get_mempolicy 236
-            #define __NR_set_mempolicy 237
-            #define __NR_mq_open 180
-            #define __NR_rt_sigreturn 139
-            #define __NR_semget 190
-            #define __NR_semctl 191
-            #define __NR_semop 193
-            #define __NR_semtimedop 192
-            #define __NR_msgctl 187
-            #define __NR_msgget 186
-            #define __NR_msgrcv 188
-            #define __NR_msgsnd 189
-
-            #define DISABLED_SYSCALL_WITH_FAKESYSCALL \
-        case __NR_shmat: \
-                return (long int)shmat(a0, (const void *)a1, a2); \
-        case __NR_setuid: \
-        case __NR_setgid: \
-        case __NR_setreuid: \
-        case __NR_setregid: \
-        case __NR_setresuid: \
-        case __NR_setresgid: \
-        case __NR_setfsuid: \
-        case __NR_setfsgid: \
-        case 1008: \
-                return 0; \
-        case __NR_clone3: \
-        case __NR_futex_waitv: \
-        case __NR_landlock_create_ruleset: \
-        case __NR_pidfd_send_signal: \
-        case __NR_rseq: \
-        case __NR_set_robust_list: \
-        case __NR_get_robust_list: \
-        case __NR_io_uring_setup: \
-        case __NR_io_uring_enter: \
-        case __NR_io_uring_register: \
-        case __NR_name_to_handle_at: \
-        case __NR_open_by_handle_at: \
-        case __NR_kcmp: \
-        case __NR_mbind: \
-        case __NR_get_mempolicy: \
-        case __NR_set_mempolicy: \
-        case __NR_mq_open: \
-        case __NR_rt_sigreturn: \
-        case __NR_semget: \
-        case __NR_semctl: \
-        case __NR_semop: \
-        case __NR_semtimedop: \
-        case __NR_msgctl: \
-        case __NR_msgget: \
-        case __NR_msgrcv: \
-        case __NR_msgsnd: \
-                return INLINE_SYSCALL_ERROR_RETURN_VALUE(ENOSYS); \
-        case __NR_accept: \
-                return accept4(a0, (struct sockaddr *)a1, (socklen_t *)a2, 0); \
-        case __NR_close_range: \
-                return close_range(a0, a1, a2); \
-        case __NR_faccessat2: \
-                return faccessat(a0, (const char *)a1, a2, a3); \
-        case __NR_epoll_pwait2: \
-                return fake_epoll_pwait2(a0, (struct epoll_event *)a1, a2, (const struct __timespec64 *)a3, (const __sigset_t *)a4, a5); \
-        case __NR_fchmodat2: \
-                return fchmodat(a0, (const char*)a1, a2, a3); \
-        case __NR_shmctl: \
-                return shmctl(a0, a1, (struct shmid_ds *)a2); \
-        case __NR_shmdt: \
-                return shmdt((const void *)a0); \
-        case __NR_shmget: \
-                return shmget(a0, a1, a2); \
-        case __NR_statx: \
-                return statx_generic(a0, (const char *)a1, a2, a3, (struct statx *)a4);
-EOF
+          printf '%s\n' '#define __NR_accept 202' \
+            '#define __NR_faccessat2 439' \
+            '#define __NR_fchmodat2 452' \
+            '#define __NR_epoll_pwait2 441' \
+            '#define __NR_statx 291' \
+            '#define __NR_close_range 436' \
+            '#define __NR_shmat 196' \
+            '#define __NR_shmctl 195' \
+            '#define __NR_shmdt 197' \
+            '#define __NR_shmget 194' \
+            '#define __NR_setuid 146' \
+            '#define __NR_setgid 144' \
+            '#define __NR_setreuid 145' \
+            '#define __NR_setregid 143' \
+            '#define __NR_setresuid 147' \
+            '#define __NR_setresgid 149' \
+            '#define __NR_setfsuid 151' \
+            '#define __NR_setfsgid 152' \
+            '#define __NR_clone3 435' \
+            '#define __NR_futex_waitv 449' \
+            '#define __NR_landlock_create_ruleset 444' \
+            '#define __NR_pidfd_send_signal 424' \
+            '#define __NR_rseq 293' \
+            '#define __NR_set_robust_list 99' \
+            '#define __NR_get_robust_list 100' \
+            '#define __NR_io_uring_setup 425' \
+            '#define __NR_io_uring_enter 426' \
+            '#define __NR_io_uring_register 427' \
+            '#define __NR_name_to_handle_at 264' \
+            '#define __NR_open_by_handle_at 265' \
+            '#define __NR_kcmp 272' \
+            '#define __NR_mbind 235' \
+            '#define __NR_get_mempolicy 236' \
+            '#define __NR_set_mempolicy 237' \
+            '#define __NR_mq_open 180' \
+            '#define __NR_rt_sigreturn 139' \
+            '#define __NR_semget 190' \
+            '#define __NR_semctl 191' \
+            '#define __NR_semop 193' \
+            '#define __NR_semtimedop 192' \
+            '#define __NR_msgctl 187' \
+            '#define __NR_msgget 186' \
+            '#define __NR_msgrcv 188' \
+            '#define __NR_msgsnd 189' \
+            '' \
+            '#define DISABLED_SYSCALL_WITH_FAKESYSCALL \\' \
+            '        case __NR_shmat: \\' \
+            '                return (long int)shmat(a0, (const void *)a1, a2); \\' \
+            '        case __NR_setuid: \\' \
+            '        case __NR_setgid: \\' \
+            '        case __NR_setreuid: \\' \
+            '        case __NR_setregid: \\' \
+            '        case __NR_setresuid: \\' \
+            '        case __NR_setresgid: \\' \
+            '        case __NR_setfsuid: \\' \
+            '        case __NR_setfsgid: \\' \
+            '        case 1008: \\' \
+            '                return 0; \\' \
+            '        case __NR_clone3: \\' \
+            '        case __NR_futex_waitv: \\' \
+            '        case __NR_landlock_create_ruleset: \\' \
+            '        case __NR_pidfd_send_signal: \\' \
+            '        case __NR_rseq: \\' \
+            '        case __NR_set_robust_list: \\' \
+            '        case __NR_get_robust_list: \\' \
+            '        case __NR_io_uring_setup: \\' \
+            '        case __NR_io_uring_enter: \\' \
+            '        case __NR_io_uring_register: \\' \
+            '        case __NR_name_to_handle_at: \\' \
+            '        case __NR_open_by_handle_at: \\' \
+            '        case __NR_kcmp: \\' \
+            '        case __NR_mbind: \\' \
+            '        case __NR_get_mempolicy: \\' \
+            '        case __NR_set_mempolicy: \\' \
+            '        case __NR_mq_open: \\' \
+            '        case __NR_rt_sigreturn: \\' \
+            '        case __NR_semget: \\' \
+            '        case __NR_semctl: \\' \
+            '        case __NR_semop: \\' \
+            '        case __NR_semtimedop: \\' \
+            '        case __NR_msgctl: \\' \
+            '        case __NR_msgget: \\' \
+            '        case __NR_msgrcv: \\' \
+            '        case __NR_msgsnd: \\' \
+            '                return INLINE_SYSCALL_ERROR_RETURN_VALUE(ENOSYS); \\' \
+            '        case __NR_accept: \\' \
+            '                return accept4(a0, (struct sockaddr *)a1, (socklen_t *)a2, 0); \\' \
+            '        case __NR_close_range: \\' \
+            '                return close_range(a0, a1, a2); \\' \
+            '        case __NR_faccessat2: \\' \
+            '                return faccessat(a0, (const char *)a1, a2, a3); \\' \
+            '        case __NR_epoll_pwait2: \\' \
+            '                return fake_epoll_pwait2(a0, (struct epoll_event *)a1, a2, (const struct __timespec64 *)a3, (const __sigset_t *)a4, a5); \\' \
+            '        case __NR_fchmodat2: \\' \
+            '                return fchmodat(a0, (const char*)a1, a2, a3); \\' \
+            '        case __NR_shmctl: \\' \
+            '                return shmctl(a0, a1, (struct shmid_ds *)a2); \\' \
+            '        case __NR_shmdt: \\' \
+            '                return shmdt((const void *)a0); \\' \
+            '        case __NR_shmget: \\' \
+            '                return shmget(a0, a1, a2); \\' \
+            '        case __NR_statx: \\' \
+            '                return statx_generic(a0, (const char *)a1, a2, a3, (struct statx *)a4);' \
+            '  > sysdeps/unix/sysv/linux/aarch64/disabled-syscall.h
       
       - name: 修改 shm-directory.h
         run: |
@@ -352,10 +351,285 @@ EOF
           path: /opt/build/glibc.tar.gz
           retention-days: 1
 
+  build-locales:
+    name: 构建语言支持 (Locales)
+    runs-on: ubuntu-24.04
+    needs: build-glibc
+    
+    steps:
+      - name: 准备环境
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
+          sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+      
+      - name: 下载构建环境
+        uses: actions/download-artifact@v4
+        with:
+          name: glibc-package
+          path: /opt/build
+      
+      - name: 解压 Glibc
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
+          sudo tar -xzf /opt/build/glibc.tar.gz -C /data/data/com.winlator/files/imagefs/usr
+      
+      - name: 创建 Locales 目录
+        run: |
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr/lib/locale
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr/share/i18n/locales
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr/share/i18n/charmaps
+          sudo mkdir -p /data/data/com.winlator/files/imagefs/usr/share/i18n/langinfo
+      
+      - name: 下载 glibc-localedata
+        run: |
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/glibc/glibc-2.42.tar.xz
+          sudo tar -xf glibc-2.42.tar.xz
+          sudo cp -r glibc-2.42/localedata/* /data/data/com.winlator/files/imagefs/usr/lib/locale/
+      
+      - name: 生成中文 Locales
+        run: |
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          
+          # 生成 zh_CN.UTF-8 locale
+          sudo tee $PREFIX/lib/locale/locale-archive << 'LOCALES_EOF'
+zh_CN.UTF-8
+zh_CN.GB2312
+zh_CN.GBK
+zh_CN.GB18030
+zh_TW.UTF-8
+zh_TW.Big5
+zh_HK.UTF-8
+en_US.UTF-8
+C.UTF-8
+LOCALES_EOF
+          
+          # 创建 locale.gen 文件
+          sudo tee $PREFIX/etc/locale.gen << 'LOCGEN_EOF'
+en_US.UTF-8 UTF-8
+en_GB.UTF-8 UTF-8
+zh_CN.UTF-8 UTF-8
+zh_CN.GB2312 GB2312
+zh_CN.GBK GBK
+zh_CN.GB18030 GB18030
+zh_TW.UTF-8 UTF-8
+zh_TW.Big5 Big5
+zh_HK.UTF-8 UTF-8
+ja_JP.UTF-8 UTF-8
+ko_KR.UTF-8 UTF-8
+de_DE.UTF-8 UTF-8
+fr_FR.UTF-8 UTF-8
+es_ES.UTF-8 UTF-8
+ru_RU.UTF-8 UTF-8
+pt_BR.UTF-8 UTF-8
+C.UTF-8 UTF-8
+POSIX POSIX
+LOCGEN_EOF
+      
+      - name: 创建 locale 支持脚本
+        run: |
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          
+          # 创建 locale 安装脚本
+          sudo tee $PREFIX/bin/install-locales.sh << 'SCRIPT_EOF'
+#!/bin/bash
+# Locales 安装脚本 - 为 Android 环境生成 locale 数据
+
+PREFIX="${PREFIX:-/data/data/com.winlator/files/imagefs/usr}"
+LOCDIR="$PREFIX/lib/locale"
+
+echo "正在生成 locales..."
+
+# 如果有 localedef 工具则使用它
+if command -v localedef &> /dev/null; then
+    # 生成 UTF-8 locales
+    localedef -i en_US -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/en_US.UTF-8 2>/dev/null || true
+    localedef -i zh_CN -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.UTF-8 2>/dev/null || true
+    localedef -i zh_CN -f GB2312 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GB2312 2>/dev/null || true
+    localedef -i zh_CN -f GBK -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GBK 2>/dev/null || true
+    localedef -i zh_CN -f GB18030 -A /usr/share/locale/locale.alias $LOCDIR/zh_CN.GB18030 2>/dev/null || true
+    localedef -i zh_TW -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_TW.UTF-8 2>/dev/null || true
+    localedef -i zh_TW -f Big5 -A /usr/share/locale/locale.alias $LOCDIR/zh_TW.Big5 2>/dev/null || true
+    localedef -i zh_HK -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/zh_HK.UTF-8 2>/dev/null || true
+    localedef -i C -f UTF-8 -A /usr/share/locale/locale.alias $LOCDIR/C.UTF-8 2>/dev/null || true
+    echo "Locales 生成完成"
+else
+    echo "警告: localedef 未找到，跳过 locale 生成"
+    echo "请确保系统已有必要的 locale 数据"
+fi
+
+# 设置默认 locale 环境变量
+export LC_ALL=zh_CN.UTF-8
+export LANG=zh_CN.UTF-8
+
+echo "Locale 环境已配置"
+SCRIPT_EOF
+          sudo chmod +x $PREFIX/bin/install-locales.sh
+      
+      - name: 创建 locale.alias 文件
+        run: |
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          sudo tee $PREFIX/share/locale/locale.alias << 'ALIAS_EOF'
+# Locale 别名文件 - 支持中文及其他语言
+# This file maps locale names to locale archive names
+
+en_US.UTF-8            en_US.UTF-8
+en_US.utf8             en_US.UTF-8
+en_GB.UTF-8            en_GB.UTF-8
+en_GB.utf8             en_GB.UTF-8
+
+zh_CN.UTF-8            zh_CN.UTF-8
+zh_CN.utf8             zh_CN.UTF-8
+zh_CN                   zh_CN.UTF-8
+chinese                zh_CN.UTF-8
+prc                    zh_CN.UTF-8
+
+zh_CN.GB2312           zh_CN.GB2312
+zh_CN.gb2312           zh_CN.GB2312
+gb2312                 zh_CN.GB2312
+gbk                    zh_CN.GBK
+
+zh_CN.GB18030          zh_CN.GB18030
+gb18030                zh_CN.GB18030
+
+zh_TW.UTF-8            zh_TW.UTF-8
+zh_TW.utf8             zh_TW.UTF-8
+zh_TW                   zh_TW.UTF-8
+taiwan                 zh_TW.UTF-8
+
+zh_TW.Big5             zh_TW.Big5
+zh_TW.big5             zh_TW.Big5
+big5                   zh_TW.Big5
+
+zh_HK.UTF-8            zh_HK.UTF-8
+zh_HK.utf8             zh_HK.UTF-8
+hong_kong              zh_HK.UTF-8
+
+ja_JP.UTF-8            ja_JP.UTF-8
+japanese               ja_JP.UTF-8
+
+ko_KR.UTF-8            ko_KR.UTF-8
+korean                 ko_KR.UTF-8
+
+de_DE.UTF-8            de_DE.UTF-8
+german                 de_DE.UTF-8
+
+fr_FR.UTF-8            fr_FR.UTF-8
+french                 fr_FR.UTF-8
+
+es_ES.UTF-8            es_ES.UTF-8
+spanish                es_ES.UTF-8
+
+ru_RU.UTF-8            ru_RU.UTF-8
+russian                ru_RU.UTF-8
+
+pt_BR.UTF-8            pt_BR.UTF-8
+brazilian              pt_BR.UTF-8
+
+C.UTF-8                C.UTF-8
+POSIX                  POSIX
+
+# 默认映射
+default                 C.UTF-8
+ALIAS_EOF
+      
+      - name: 创建中文 locale charmap 文件
+        run: |
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          sudo mkdir -p $PREFIX/share/i18n/charmaps
+          
+          # 创建 GB2312 charmap
+          sudo tee $PREFIX/share/i18n/charmaps/GB2312 << 'GB2312_EOF'
+# GB2312 charmap for Chinese locale
+<code_set_name> GB2312</code_set_name>
+<comment_char> %</comment_char>
+<escape_char> /</escape_char>
+
+CHARMAP
+NUL     \\x00
+SOH     \\x01
+STX     \\x02
+ETX     \\x03
+EOT     \\x04
+ENQ     \\x05
+ACK     \\x06
+BEL     \\x07
+BS      \\x08
+HT      \\x09
+LF      \\x0A
+VT      \\x0B
+FF      \\x0C
+CR      \\x0D
+SO      \\x0E
+SI      \\x0F
+DLE     \\x10
+DC1     \\x11
+DC2     \\x12
+DC3     \\x13
+DC4     \\x14
+NAK     \\x15
+SYN     \\x16
+ETB     \\x17
+CAN     \\x18
+EM      \\x19
+SUB     \\x1A
+ESC     \\x1B
+FS      \\x1C
+GS      \\x1D
+RS      \\x1E
+US      \\x1F
+SP      \\x20
+% Character set mapping
+END CHARMAP
+GB2312_EOF
+      
+      - name: 创建环境变量配置文件
+        run: |
+          PREFIX=/data/data/com.winlator/files/imagefs/usr
+          sudo tee $PREFIX/etc/profile.d/locale.sh << 'ENV_EOF'
+# Locale 环境变量配置
+# 支持中文显示
+
+# 默认语言设置
+export LANG=zh_CN.UTF-8
+export LC_ALL=zh_CN.UTF-8
+
+# 支持中文输入输出
+export G_BROKEN_FILENAMES=1
+export LC_CTYPE=zh_CN.UTF-8
+export LC_NUMERIC=C
+export LC_TIME=zh_CN.UTF-8
+export LC_COLLATE=zh_CN.UTF-8
+export LC_MONETARY=zh_CN.UTF-8
+export LC_MESSAGES=POSIX
+export LC_PAPER=zh_CN.UTF-8
+export LC_NAME=zh_CN.UTF-8
+export LC_ADDRESS=zh_CN.UTF-8
+export LC_TELEPHONE=zh_CN.UTF-8
+export LC_MEASUREMENT=zh_CN.UTF-8
+export LC_IDENTIFICATION=zh_CN.UTF-8
+
+# 字符集设置
+export CHARSET=UTF-8
+
+# 提示信息本地化
+export TEXTDOMAIN=coreutils
+export TEXTDOMAINDIR=$PREFIX/share/locale
+ENV_EOF
+          sudo chmod +x $PREFIX/etc/profile.d/locale.sh
+      
+      - name: 上传 Locales
+        uses: actions/upload-artifact@v4
+        with:
+          name: locales-package
+          path: /data/data/com.winlator/files/imagefs/usr
+          retention-days: 1
+
   build-gcc-libs:
     name: 构建 GCC-Libs
     runs-on: ubuntu-24.04
-    needs: build-glibc
+    needs: build-locales
     
     steps:
       - name: 准备环境
