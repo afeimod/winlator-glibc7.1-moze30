@@ -245,6 +245,12 @@ jobs:
       
       - name: 配置 sysvipc/Makefile (编译前)
         run: |
+          # 确保 build/sysvipc 目录存在
+          if [ ! -d /opt/glibc-2.42/build/sysvipc ]; then
+            sudo mkdir -p /opt/glibc-2.42/build/sysvipc
+            # 从源目录复制 Makefile
+            sudo cp /opt/glibc-2.42/sysvipc/Makefile /opt/glibc-2.42/build/sysvipc/Makefile 2>/dev/null || true
+          fi
           cd /opt/glibc-2.42/build/sysvipc
           # 将 android_sysvshm.o 添加到编译列表中
           if ! grep -q "android_sysvshm" Makefile; then
