@@ -201,7 +201,8 @@ jobs:
       - name: 创建 disabled-syscall.h
         run: |
           cd /opt/glibc-2.42
-          printf '%s\n' '#define __NR_accept 202' \
+          printf '%s\n' \
+            '#define __NR_accept 202' \
             '#define __NR_faccessat2 439' \
             '#define __NR_fchmodat2 452' \
             '#define __NR_epoll_pwait2 441' \
@@ -303,7 +304,7 @@ jobs:
             '        case __NR_shmget: \\' \
             '                return shmget(a0, a1, a2); \\' \
             '        case __NR_statx: \\' \
-            '        return statx_generic(a0, (const char *)a1, a2, a3, (struct statx *)a4);' \
+            '                return statx_generic(a0, (const char *)a1, a2, a3, (struct statx *)a4);' \
             > sysdeps/unix/sysv/linux/aarch64/disabled-syscall.h
       
       - name: 修改 shm-directory.h
