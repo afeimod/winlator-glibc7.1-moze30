@@ -321,7 +321,6 @@ jobs:
             --host=aarch64-linux-gnu \
             --build=x86_64-linux-gnu \
             --target=aarch64-linux-gnu \
-            --with-headers=/opt/tools/include \
             --with-bugurl=https://github.com/moze30/winlator-glibc/issues \
             --with-pkgversion="GNU libc for Winlator-Glibc" \
             --enable-bind-now \
