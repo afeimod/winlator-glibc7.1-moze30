@@ -127,12 +127,6 @@ jobs:
           sparse-checkout: |
             .github/workflows/scripts/glibc.yml
       
-      - name: 下载构建环境
-        uses: actions/download-artifact@v4
-        with:
-          name: build-env-${{ needs.setup-build-env.outputs.build_id }}
-          path: /opt
-      
       - name: 准备构建环境
         run: |
           sudo mkdir -p /opt/build
@@ -140,6 +134,9 @@ jobs:
           sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
           sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
           sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+          cd /opt
+          sudo git clone https://github.com/termux-pacman/glibc-packages.git || sudo git -C glibc-packages pull
+          sudo git clone https://github.com/moze30/winlator-wcp.git || sudo git -C winlator-wcp pull
       
       - name: 下载 Glibc 源码
         run: |
