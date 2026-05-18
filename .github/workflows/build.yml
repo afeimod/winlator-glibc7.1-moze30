@@ -174,12 +174,6 @@ jobs:
           sudo cp /opt/winlator-wcp/glibc_patches/android_sysvshm.c sysvipc/
           sudo cp /opt/winlator-wcp/glibc_patches/android_sysvshm.h sysvipc/
       
-      - name: 修改 sysvipc/Makefile
-        run: |
-          cd /opt/glibc-2.42/sysvipc
-          echo 'android_sysvshm.S' | sudo tee -a Makefile > /dev/null
-          cat Makefile | grep android_sysvshm || echo "android_sysvshm.S" | sudo tee -a Makefile
-      
       - name: 生成 android_ids.h
         run: |
           cd /opt/glibc-2.42
