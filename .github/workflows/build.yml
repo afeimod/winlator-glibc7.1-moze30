@@ -245,7 +245,7 @@ jobs:
       
       - name: 配置 sysvipc/Makefile (编译前)
         run: |
-          cd /opt/glibc-2.42/sysvipc
+          cd /opt/glibc-2.42/build/sysvipc
           # 将 android_sysvshm.o 添加到编译列表中
           if ! grep -q "android_sysvshm" Makefile; then
             sudo sed -i 's/shmem-android\.o/shmem-android.o android_sysvshm.o/g' Makefile
