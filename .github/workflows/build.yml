@@ -180,14 +180,7 @@ jobs:
           sudo cp /opt/glibc-packages/gpkg/glibc/syslog.c misc/
           sudo cp /opt/glibc-packages/gpkg/glibc/{shmem-android.c,shmem-android.h} sysvipc/
       
-      - name: 配置 sysvipc/Makefile
-        run: |
-          cd /opt/glibc-2.42
-          # 将 android_sysvshm.c 添加到 sysvipc 的构建列表中
-          if ! grep -q "android_sysvshm" sysvipc/Makefile; then
-            sudo sed -i 's/shmem-android\.o/shmem-android.o android_sysvshm.o/g' sysvipc/Makefile
-          fi
-      
+
       - name: 复制 Winlator 文件
         run: |
           cd /opt/glibc-2.42
@@ -249,6 +242,14 @@ jobs:
             --disable-werror \
             --disable-default-pie \
             --enable-memory-tagging
+      
+      - name: 配置 sysvipc/Makefile (编译前)
+        run: |
+          cd /opt/glibc-2.42/sysvipc
+          # 将 android_sysvshm.o 添加到编译列表中
+          if ! grep -q "android_sysvshm" Makefile; then
+            sudo sed -i 's/shmem-android\.o/shmem-android.o android_sysvshm.o/g' Makefile
+          fi
       
       - name: 编译 Glibc
         run: |
