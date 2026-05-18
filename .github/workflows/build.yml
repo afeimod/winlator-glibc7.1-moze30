@@ -245,17 +245,37 @@ jobs:
       
       - name: 配置 sysvipc/Makefile (编译前)
         run: |
-          # 确保 build/sysvipc 目录存在
-          if [ ! -d /opt/glibc-2.42/build/sysvipc ]; then
-            sudo mkdir -p /opt/glibc-2.42/build/sysvipc
-            # 从源目录复制 Makefile
-            sudo cp /opt/glibc-2.42/sysvipc/Makefile /opt/glibc-2.42/build/sysvipc/Makefile 2>/dev/null || true
+          cd /opt/glibc-2.42
+          
+          # 创建 build/sysvipc 目录并复制源文件
+          sudo mkdir -p build/sysvipc
+          sudo cp sysvipc/Makefile build/sysvipc/Makefile 2>/dev/null || true
+          
+          # 确保 android_sysvshm.c 和 .h 在源目录
+          if [ ! -f sysvipc/android_sysvshm.c ]; then
+            sudo cp winlator-wcp/glibc_patches/android_sysvshm.c sysvipc/ 2>/dev/null || true
+            sudo cp winlator-wcp/glibc_patches/android_sysvshm.h sysvipc/ 2>/dev/null || true
           fi
-          cd /opt/glibc-2.42/build/sysvipc
-          # 将 android_sysvshm.o 添加到编译列表中
+          
+          cd build/sysvipc
+          
+          # 方案1: 如果 Makefile 已有 shmem-android.o，将 android_sysvshm.o 添加到其后
+          if grep -q "shmem-android\.o" Makefile; then
+            if ! grep -q "android_sysvshm" Makefile; then
+              sudo sed -i 's/shmem-android\.o/shmem-android.o android_sysvshm.o/g' Makefile
+            fi
+          fi
+          
+          # 方案2: 如果 Makefile 中有 subdirs 或 generated 行，添加 android_sysvshm
           if ! grep -q "android_sysvshm" Makefile; then
-            sudo sed -i 's/shmem-android\.o/shmem-android.o android_sysvshm.o/g' Makefile
+            # 查找包含 shmem-android 的行并修改
+            sudo sed -i '/shmem-android/a\        android_sysvshm \\' Makefile
+            # 移除末尾的反斜杠（如果是最后一行）
+            sudo sed -i '$ s/\\$//' Makefile
           fi
+          
+          # 验证修改
+          grep -E "(android_sysvshm|shmem-android)" Makefile || echo "警告: Makefile 可能未正确修改"
       
       - name: 编译 Glibc
         run: |
