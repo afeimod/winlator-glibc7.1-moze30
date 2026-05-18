@@ -304,8 +304,7 @@ jobs:
             '        case __NR_shmget: \\' \
             '                return shmget(a0, a1, a2); \\' \
             '        case __NR_statx: \\' \
-            '                return statx_generic(a0, (const char *)a1, a2, a3, (struct statx *)a4);' \
-            > sysdeps/unix/sysv/linux/aarch64/disabled-syscall.h
+            '                return statx_generic(a0, (const char *)a1, a2, a3, (struct statx *)a4);' > sysdeps/unix/sysv/linux/aarch64/disabled-syscall.h
       
       - name: 修改 shm-directory.h
         run: |
