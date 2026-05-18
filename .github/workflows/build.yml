@@ -129,6 +129,8 @@ jobs:
       
       - name: 准备构建环境
         run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           sudo mkdir -p /opt/build
           sudo chmod -R 777 /opt/build
           sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
@@ -337,11 +339,7 @@ jobs:
       - name: 编译 Glibc
         run: |
           cd /opt/glibc-2.42/build
-          sudo make -j$(nproc) \
-            CC=aarch64-linux-gnu-gcc \
-            CXX=aarch64-linux-gnu-g++ \
-            AR=aarch64-linux-gnu-ar \
-            RANLIB=aarch64-linux-gnu-ranlib
+          sudo make -j$(nproc)
       
       - name: 安装 Glibc
         run: |
