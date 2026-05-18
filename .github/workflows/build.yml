@@ -15,6 +15,14 @@ on:
           - core
           - x11
           - multimedia
+      build_locale:
+        description: '构建语言'
+        required: true
+        default: 'zh_CN'
+        type: choice
+        options:
+          - zh_CN
+          - en_US
       packages:
         description: '指定包名（多个用逗号分隔，可选）'
         required: false
@@ -22,6 +30,12 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # 统一安装目录
+  INSTALL_PREFIX: /data/data/com.winlator/files/imagefs/usr
+  GLIBC_VERSION: '2.42'
+  BUILD_LOCALE: ${{ github.event.inputs.build_locale || 'zh_CN' }}
 
 jobs:
   setup-build-env:
@@ -166,6 +180,14 @@ jobs:
           sudo cp /opt/glibc-packages/gpkg/glibc/syslog.c misc/
           sudo cp /opt/glibc-packages/gpkg/glibc/{shmem-android.c,shmem-android.h} sysvipc/
       
+      - name: 配置 sysvipc/Makefile
+        run: |
+          cd /opt/glibc-2.42
+          # 将 android_sysvshm.c 添加到 sysvipc 的构建列表中
+          if ! grep -q "android_sysvshm" sysvipc/Makefile; then
+            sudo sed -i 's/shmem-android\.o/shmem-android.o android_sysvshm.o/g' sysvipc/Makefile
+          fi
+      
       - name: 复制 Winlator 文件
         run: |
           cd /opt/glibc-2.42
@@ -238,6 +260,43 @@ jobs:
           cd /opt/glibc-2.42/build
           sudo make install DESTDIR=$PWD/package
           sudo tar -czf /opt/build/glibc.tar.gz -C package .
+      
+      - name: 配置语言环境
+        if: env.BUILD_LOCALE == 'zh_CN'
+        run: |
+          echo "配置中文语言环境..."
+          # 设置中文 locale
+          echo "zh_CN.UTF-8 UTF-8" | sudo tee -a /etc/locale.gen
+          echo "en_US.UTF-8 UTF-8" | sudo tee -a /etc/locale.gen
+          sudo locale-gen
+          
+          # 创建 locale 目录
+          sudo mkdir -p ${INSTALL_PREFIX}/lib/locale
+          sudo mkdir -p ${INSTALL_PREFIX}/usr/share/locale
+          
+          # 生成中文 locale（如果 localedef 可用）
+          if command -v localedef &> /dev/null; then
+            sudo localedef -i zh_CN -f UTF-8 -c zh_CN.UTF-8 || true
+            sudo localedef -i zh_CN -f GBK zh_CN.GBK || true
+          fi
+          
+          # 从 glibc 源码安装中文 locale
+          cd /opt/glibc-${GLIBC_VERSION}
+          if [ -d localedata ]; then
+            sudo make install-locales DESTDIR=$PWD/build/package || true
+          fi
+          
+          echo "中文语言环境配置完成"
+
+      - name: 配置英文语言环境
+        if: env.BUILD_LOCALE == 'en_US'
+        run: |
+          echo "配置英文语言环境..."
+          echo "en_US.UTF-8 UTF-8" | sudo tee -a /etc/locale.gen
+          sudo locale-gen
+          sudo mkdir -p ${INSTALL_PREFIX}/lib/locale
+          sudo mkdir -p ${INSTALL_PREFIX}/usr/share/locale
+          echo "英文语言环境配置完成"
       
       - name: 上传 Glibc
         uses: actions/upload-artifact@v4
