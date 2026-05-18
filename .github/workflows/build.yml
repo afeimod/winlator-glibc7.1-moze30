@@ -238,11 +238,14 @@ jobs:
             echo "修改 sysvipc/Makefile"
           fi
           
-          # 将 android_sysvshm.o 添加到 shmem-android.o 之后
+          # 将 android_sysvshm.o 添加到 shmem-android 之后（新行）
+          # 关键：Makefile 对象列表是多行连续，每行以 \ 结尾
+          # 需要在 shmem-android \ 行的下一行插入 android_sysvshm
           if grep -q "shmem-android" $MAKELIST; then
             if ! grep -q "android_sysvshm" $MAKELIST; then
-              # 在包含 shmem-android 的行添加 android_sysvshm
-              sudo sed -i '/shmem-android/{s/$/ android_sysvshm/}' $MAKELIST
+              # 使用 sed 在匹配行后追加新行
+              # /shmem-android/{ a\xxx } 会在匹配行后插入 xxx
+              sudo sed -i '/shmem-android/a\        android_sysvshm \\' $MAKELIST
               echo "已添加 android_sysvshm 到对象列表"
             else
               echo "android_sysvshm 已在对象列表中"
