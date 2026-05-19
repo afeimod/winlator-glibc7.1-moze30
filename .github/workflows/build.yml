@@ -801,6 +801,13 @@ jobs:
           sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
           sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
           sudo chmod -R 777 /data/data/com.winlator/files/imagefs
+          # 添加交叉编译工具链到 PATH
+          echo "/usr/aarch64-linux-gnu/bin" | sudo tee -a /etc/environment
+          sudo ln -sf /usr/bin/aarch64-linux-gnu-gcc /usr/local/bin/aarch64-linux-gnu-gcc
+          sudo ln -sf /usr/bin/aarch64-linux-gnu-g++ /usr/local/bin/aarch64-linux-gnu-g++
+          sudo ln -sf /usr/bin/aarch64-linux-gnu-ar /usr/local/bin/aarch64-linux-gnu-ar
+          sudo ln -sf /usr/bin/aarch64-linux-gnu-ranlib /usr/local/bin/aarch64-linux-gnu-ranlib
+          sudo ln -sf /usr/bin/aarch64-linux-gnu-strip /usr/local/bin/aarch64-linux-gnu-strip
       
       - name: 下载构建环境
         uses: actions/download-artifact@v4
