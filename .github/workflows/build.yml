@@ -624,11 +624,6 @@ jobs:
           name: build-env-${{ needs.setup-build-env.outputs.build_id }}
           path: /opt
       
-      - name: 克隆依赖仓库
-        run: |
-          cd /opt
-          sudo git clone https://github.com/moze30/winlator-wcp.git || sudo git -C winlator-wcp pull
-      
       - name: 构建 libgmp（GCC 依赖）
         run: |
           cd /opt
