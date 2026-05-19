@@ -802,12 +802,10 @@ jobs:
           sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
           sudo chmod -R 777 /data/data/com.winlator/files/imagefs
           # 添加交叉编译工具链到 PATH
-          echo "/usr/aarch64-linux-gnu/bin" | sudo tee -a /etc/environment
-          sudo ln -sf /usr/bin/aarch64-linux-gnu-gcc /usr/local/bin/aarch64-linux-gnu-gcc
-          sudo ln -sf /usr/bin/aarch64-linux-gnu-g++ /usr/local/bin/aarch64-linux-gnu-g++
-          sudo ln -sf /usr/bin/aarch64-linux-gnu-ar /usr/local/bin/aarch64-linux-gnu-ar
-          sudo ln -sf /usr/bin/aarch64-linux-gnu-ranlib /usr/local/bin/aarch64-linux-gnu-ranlib
-          sudo ln -sf /usr/bin/aarch64-linux-gnu-strip /usr/local/bin/aarch64-linux-gnu-strip
+          export PATH="/usr/bin:/usr/local/bin:$PATH"
+          echo "PATH=$PATH" >> $GITHUB_ENV
+          # 验证交叉编译器存在
+          which aarch64-linux-gnu-gcc || echo "Warning: cross-compiler not found in default PATH"
       
       - name: 下载构建环境
         uses: actions/download-artifact@v4
@@ -918,6 +916,8 @@ jobs:
           sudo wget -q https://github.com/openssl/openssl/releases/download/openssl-3.4.1/openssl-3.4.1.tar.gz
           sudo tar -xf openssl-3.4.1.tar.gz
           cd openssl-3.4.1
+          # 设置PATH确保交叉编译器可用
+          export PATH="/usr/bin:/bin:/usr/local/bin:$PATH"
           sudo ./Configure linux-aarch64 \
             --prefix=/data/data/com.winlator/files/imagefs/usr \
             --openssldir=/data/data/com.winlator/files/imagefs/usr/etc/ssl \
@@ -925,6 +925,16 @@ jobs:
             shared \
             enable-ktls \
             no-afalgeng
+          # 设置交叉编译工具链
+          export CC="aarch64-linux-gnu-gcc"
+          export AR="aarch64-linux-gnu-ar"
+          export AS="aarch64-linux-gnu-as"
+          export LD="aarch64-linux-gnu-ld"
+          export NM="aarch64-linux-gnu-nm"
+          export RANLIB="aarch64-linux-gnu-ranlib"
+          export STRIP="aarch64-linux-gnu-strip"
+          export CROSS_COMPILE="aarch64-linux-gnu-"
+          # 修改Makefile中的工具链变量
           sudo sed -i 's/^CC=.*/CC= aarch64-linux-gnu-gcc/' Makefile
           sudo sed -i 's/^AR=.*/AR= aarch64-linux-gnu-ar/' Makefile
           sudo sed -i 's/^AS=.*/AS= aarch64-linux-gnu-as/' Makefile
@@ -932,7 +942,7 @@ jobs:
           sudo sed -i 's/^NM=.*/NM= aarch64-linux-gnu-nm/' Makefile
           sudo sed -i 's/^RANLIB=.*/RANLIB= aarch64-linux-gnu-ranlib/' Makefile
           sudo sed -i 's/^STRIP=.*/STRIP= aarch64-linux-gnu-strip/' Makefile
-          sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=/' Makefile
+          sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=aarch64-linux-gnu-/' Makefile
           sudo make depend
           sudo make -j$(nproc)
           sudo make install \
