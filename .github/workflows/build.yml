@@ -677,15 +677,18 @@ jobs:
       - name: 下载 GCC 源码
         run: |
           cd /opt
-          sudo wget -q https://ftp.gnu.org/gnu/gcc/gcc-14.2.0/gcc-14.2.0.tar.xz
-          sudo tar -xf gcc-14.2.0.tar.xz
+          # 使用GCC 13.2.0（与参考项目的补丁兼容）
+          # GCC 14.2.0有c++26支持问题，建议使用稳定的13.2.0版本
+          sudo wget -q https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
+          sudo tar -xf gcc-13.2.0.tar.xz
       
       - name: 应用补丁
         run: |
-          cd /opt/gcc-14.2.0
+          cd /opt/gcc-13.2.0
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           PATCH_DIR=/opt/winlator-wcp/gcc-libs
           if [ -f ${PATCH_DIR}/set_glibc_dynamic_linker.patch ]; then
+            # 确保补丁适用于GCC 13.2.0（补丁文件名是gcc-13.2.0）
             sudo sed -i "s|@TERMUX_PREFIX@|${PREFIX}|g" ${PATCH_DIR}/set_glibc_dynamic_linker.patch
             sudo patch -p1 < ${PATCH_DIR}/set_glibc_dynamic_linker.patch || \
               sudo find gcc/config -name "*.h" -exec sudo sed -i 's|/lib/ld-linux-aarch64|/data/data/com.winlator/files/imagefs/usr/lib/ld-linux-aarch64|g' {} \;
@@ -693,22 +696,14 @@ jobs:
           sudo sed -i 's@\./fixinc\.sh@-c true@' gcc/Makefile.in
           sudo sed -i '/m64=/s/lib64/lib/' gcc/config/i386/t-linux64
           sudo sed -i '/lp64=/s/lib64/lib/' gcc/config/aarch64/t-aarch64-linux
-          echo "14.2.0" | sudo tee gcc/BASE-VER
+          # 设置GCC版本为13.2.0（与补丁兼容）
+          echo "13.2.0" | sudo tee gcc/BASE-VER
           echo "" | sudo tee gcc/DEV-PHASE
-          # 修复GCC 14.2.0不支持C++26标准的问题
-          # GCC 14.2.0只支持到C++23，但libstdc++代码中有gnu++26的定义导致编译错误
-          # 注意：仅替换编译器标志是不够的，因为源代码本身使用了C++26特有的API
-          # （如string_view需要std::前缀，__unicode命名空间等）
-          # 因此需要删除c++26目录以避免编译这些文件
-          sudo find . -name "*.h" -exec sudo sed -i 's/gnu++26/gnu++20/g' {} \; 2>/dev/null || true
-          sudo find . -name "Makefile*" -exec sudo sed -i 's/-std=gnu++26/-std=gnu++20/g' {} \; 2>/dev/null || true
-          # 删除c++26源代码目录，避免编译C++26特有特性
-          sudo rm -rf libstdc++-v3/src/c++26 || true
-          sudo rm -rf libstdc++-v3/include/c++26 || true
+          # GCC 13.2.0不需要c++26修复，使用标准配置即可
       
       - name: 配置 GCC-Libs
         run: |
-          cd /opt/gcc-14.2.0
+          cd /opt/gcc-13.2.0
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           sudo mkdir build && cd build
           # 参考项目配置，移除 --with-system-zlib（会导致host工具链接错误）
@@ -740,7 +735,7 @@ jobs:
       
       - name: 编译安装 GCC-Libs
         run: |
-          cd /opt/gcc-14.2.0/build
+          cd /opt/gcc-13.2.0/build
           sudo make -j$(nproc)
           sudo make install
       
