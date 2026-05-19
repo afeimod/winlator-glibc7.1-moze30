@@ -695,6 +695,10 @@ jobs:
           sudo sed -i '/lp64=/s/lib64/lib/' gcc/config/aarch64/t-aarch64-linux
           echo "14.2.0" | sudo tee gcc/BASE-VER
           echo "" | sudo tee gcc/DEV-PHASE
+          # 修复GCC 14.2.0不支持C++26标准的问题
+          # GCC 14.2.0只支持到C++23，但libstdc++代码中有gnu++26的定义导致编译错误
+          sudo find . -name "*.h" -exec sudo sed -i 's/gnu++26/gnu++20/g' {} \; 2>/dev/null || true
+          sudo find . -name "Makefile*" -exec sudo sed -i 's/-std=gnu++26/-std=gnu++20/g' {} \; 2>/dev/null || true
       
       - name: 配置 GCC-Libs
         run: |
