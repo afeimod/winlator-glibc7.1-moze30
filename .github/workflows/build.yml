@@ -697,8 +697,14 @@ jobs:
           echo "" | sudo tee gcc/DEV-PHASE
           # 修复GCC 14.2.0不支持C++26标准的问题
           # GCC 14.2.0只支持到C++23，但libstdc++代码中有gnu++26的定义导致编译错误
+          # 注意：仅替换编译器标志是不够的，因为源代码本身使用了C++26特有的API
+          # （如string_view需要std::前缀，__unicode命名空间等）
+          # 因此需要删除c++26目录以避免编译这些文件
           sudo find . -name "*.h" -exec sudo sed -i 's/gnu++26/gnu++20/g' {} \; 2>/dev/null || true
           sudo find . -name "Makefile*" -exec sudo sed -i 's/-std=gnu++26/-std=gnu++20/g' {} \; 2>/dev/null || true
+          # 删除c++26源代码目录，避免编译C++26特有特性
+          sudo rm -rf libstdc++-v3/src/c++26 || true
+          sudo rm -rf libstdc++-v3/include/c++26 || true
       
       - name: 配置 GCC-Libs
         run: |
