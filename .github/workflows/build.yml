@@ -701,6 +701,7 @@ jobs:
           cd /opt/gcc-14.2.0
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           sudo mkdir build && cd build
+          # 参考项目配置，移除 --with-system-zlib（会导致host工具链接错误）
           sudo ../configure \
             --host=aarch64-linux-gnu \
             --build=x86_64-linux-gnu \
@@ -722,7 +723,6 @@ jobs:
             --disable-libssp \
             --disable-libstdcxx-pch \
             --with-linker-hash-style=gnu \
-            --with-system-zlib \
             --with-gmp=/opt/gmp \
             --with-mpfr=/opt/mpfr \
             --with-mpc=/opt/mpc \
