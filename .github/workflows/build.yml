@@ -632,6 +632,35 @@ jobs:
           # 克隆或更新 winlator-wcp 仓库
           sudo git clone https://github.com/moze30/winlator-wcp.git || sudo git -C winlator-wcp pull
       
+      - name: 下载 GCC 依赖 (GMP, MPFR, MPC)
+        run: |
+          cd /opt
+          # 下载 GMP
+          sudo wget -q https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz
+          sudo tar -xf gmp-6.3.0.tar.xz
+          cd gmp-6.3.0
+          sudo ./configure --prefix=/opt/gcc-deps --disable-shared --enable-static
+          sudo make -j$(nproc)
+          sudo make install
+          
+          # 下载 MPFR
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz
+          sudo tar -xf mpfr-4.2.1.tar.xz
+          cd mpfr-4.2.1
+          sudo ./configure --prefix=/opt/gcc-deps --with-gmp=/opt/gcc-deps
+          sudo make -j$(nproc)
+          sudo make install
+          
+          # 下载 MPC
+          cd /opt
+          sudo wget -q https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz
+          sudo tar -xf mpc-1.3.1.tar.gz
+          cd mpc-1.3.1
+          sudo ./configure --prefix=/opt/gcc-deps --with-gmp=/opt/gcc-deps
+          sudo make -j$(nproc)
+          sudo make install
+      
       - name: 应用补丁
         run: |
           cd /opt/gcc-14.2.0
@@ -650,6 +679,7 @@ jobs:
         run: |
           cd /opt/gcc-14.2.0
           PREFIX=/data/data/com.winlator/files/imagefs/usr
+          GCC_DEPS=/opt/gcc-deps
           sudo mkdir build && cd build
           sudo ../configure \
             --host=aarch64-linux-gnu \
@@ -673,6 +703,9 @@ jobs:
             --disable-libstdcxx-pch \
             --with-linker-hash-style=gnu \
             --with-system-zlib \
+            --with-gmp=${GCC_DEPS} \
+            --with-mpfr=${GCC_DEPS} \
+            --with-mpc=${GCC_DEPS} \
             LD_FOR_TARGET=aarch64-linux-gnu-ld
       
       - name: 编译安装 GCC-Libs
