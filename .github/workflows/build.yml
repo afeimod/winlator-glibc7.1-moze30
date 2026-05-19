@@ -917,7 +917,9 @@ jobs:
           sudo tar -xf openssl-3.4.1.tar.gz
           cd openssl-3.4.1
           # 设置PATH确保交叉编译器可用
-          export PATH="/usr/bin:/bin:/usr/local/bin:$PATH"
+          export PATH="/usr/bin:/bin:/usr/local/bin:/usr/aarch64-linux-gnu/bin:$PATH"
+          # 确认交叉编译器存在
+          which aarch64-linux-gnu-gcc || ls -la /usr/bin/aarch64-linux-gnu-gcc || ls -la /usr/aarch64-linux-gnu/bin/*
           sudo ./Configure linux-aarch64 \
             --prefix=/data/data/com.winlator/files/imagefs/usr \
             --openssldir=/data/data/com.winlator/files/imagefs/usr/etc/ssl \
@@ -925,19 +927,20 @@ jobs:
             shared \
             enable-ktls \
             no-afalgeng
-          # 修改Makefile中的工具链变量
-          sudo sed -i 's/^CC=.*/CC= aarch64-linux-gnu-gcc/' Makefile
-          sudo sed -i 's/^AR=.*/AR= aarch64-linux-gnu-ar/' Makefile
-          sudo sed -i 's/^AS=.*/AS= aarch64-linux-gnu-as/' Makefile
-          sudo sed -i 's/^LD=.*/LD= aarch64-linux-gnu-ld/' Makefile
-          sudo sed -i 's/^NM=.*/NM= aarch64-linux-gnu-nm/' Makefile
-          sudo sed -i 's/^RANLIB=.*/RANLIB= aarch64-linux-gnu-ranlib/' Makefile
-          sudo sed -i 's/^STRIP=.*/STRIP= aarch64-linux-gnu-strip/' Makefile
-          sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=aarch64-linux-gnu-/' Makefile
-          # 使用 env 保持 PATH 环境变量，让 make 的子进程能找到交叉编译器
-          sudo env "PATH=$PATH" make depend
-          sudo env "PATH=$PATH" make -j$(nproc)
-          sudo env "PATH=$PATH" make install \
+          # 修改Makefile中的工具链变量，使用绝对路径
+          sudo sed -i 's|^CC=|CC=|' Makefile
+          sudo sed -i 's|^CC=.*|CC= /usr/bin/aarch64-linux-gnu-gcc|' Makefile
+          sudo sed -i 's|^AR=.*|AR= /usr/bin/aarch64-linux-gnu-ar|' Makefile
+          sudo sed -i 's|^AS=.*|AS= /usr/bin/aarch64-linux-gnu-as|' Makefile
+          sudo sed -i 's|^LD=.*|LD= /usr/bin/aarch64-linux-gnu-ld|' Makefile
+          sudo sed -i 's|^NM=.*|NM= /usr/bin/aarch64-linux-gnu-nm|' Makefile
+          sudo sed -i 's|^RANLIB=.*|RANLIB= /usr/bin/aarch64-linux-gnu-ranlib|' Makefile
+          sudo sed -i 's|^STRIP=.*|STRIP= /usr/bin/aarch64-linux-gnu-strip|' Makefile
+          sudo sed -i 's|^CROSS_COMPILE=.*|CROSS_COMPILE=aarch64-linux-gnu-|' Makefile
+          # 使用绝对路径执行 make
+          sudo env "PATH=/usr/bin:/bin:/usr/local/bin:/usr/aarch64-linux-gnu/bin:$PATH" make depend
+          sudo env "PATH=/usr/bin:/bin:/usr/local/bin:/usr/aarch64-linux-gnu/bin:$PATH" make -j$(nproc)
+          sudo env "PATH=/usr/bin:/bin:/usr/local/bin:/usr/aarch64-linux-gnu/bin:$PATH" make install \
             MANDIR=/data/data/com.winlator/files/imagefs/usr/share/man \
             MANSUFFIX=ssl \
             install_sw install_ssldirs install_man_docs
