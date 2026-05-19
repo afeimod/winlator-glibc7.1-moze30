@@ -401,6 +401,10 @@ jobs:
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           
+          # 创建 bin 目录
+          sudo mkdir -p $PREFIX/bin
+          sudo chmod -R 777 $PREFIX/bin
+          
           # 创建 locale 安装脚本
           printf '%s\n' '#!/bin/bash' '# Locales 安装脚本 - 为 Android 环境生成 locale 数据' '' \
             'PREFIX="${PREFIX:-/data/data/com.winlator/files/imagefs/usr}"' \
@@ -427,7 +431,7 @@ jobs:
             'export LC_ALL=zh_CN.UTF-8' \
             'export LANG=zh_CN.UTF-8' '' \
             'echo "Locale 环境已配置"' \
-            > $PREFIX/bin/install-locales.sh
+            | sudo tee $PREFIX/bin/install-locales.sh > /dev/null
           sudo chmod +x $PREFIX/bin/install-locales.sh
       
       - name: 创建 locale.alias 文件
