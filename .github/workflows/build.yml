@@ -384,39 +384,18 @@ jobs:
           sudo chmod -R 777 $PREFIX/etc
           
           # 生成 locale-archive 文件（仅包含 locale 名称列表，不是二进制文件）
-          sudo tee $PREFIX/lib/locale/locale-archive > /dev/null << 'EOF'
-zh_CN.UTF-8
-zh_CN.GB2312
-zh_CN.GBK
-zh_CN.GB18030
-zh_TW.UTF-8
-zh_TW.Big5
-zh_HK.UTF-8
-en_US.UTF-8
-C.UTF-8
-EOF
+          printf '%s\n' 'zh_CN.UTF-8' 'zh_CN.GB2312' 'zh_CN.GBK' 'zh_CN.GB18030' \
+            'zh_TW.UTF-8' 'zh_TW.Big5' 'zh_HK.UTF-8' 'en_US.UTF-8' 'C.UTF-8' \
+            | sudo tee $PREFIX/lib/locale/locale-archive > /dev/null
           
           # 创建 locale.gen 文件
-          sudo tee $PREFIX/etc/locale.gen > /dev/null << 'EOF'
-en_US.UTF-8 UTF-8
-en_GB.UTF-8 UTF-8
-zh_CN.UTF-8 UTF-8
-zh_CN.GB2312 GB2312
-zh_CN.GBK GBK
-zh_CN.GB18030 GB18030
-zh_TW.UTF-8 UTF-8
-zh_TW.Big5 Big5
-zh_HK.UTF-8 UTF-8
-ja_JP.UTF-8 UTF-8
-ko_KR.UTF-8 UTF-8
-de_DE.UTF-8 UTF-8
-fr_FR.UTF-8 UTF-8
-es_ES.UTF-8 UTF-8
-ru_RU.UTF-8 UTF-8
-pt_BR.UTF-8 UTF-8
-C.UTF-8 UTF-8
-POSIX POSIX
-EOF
+          printf '%s\n' 'en_US.UTF-8 UTF-8' 'en_GB.UTF-8 UTF-8' 'zh_CN.UTF-8 UTF-8' \
+            'zh_CN.GB2312 GB2312' 'zh_CN.GBK GBK' 'zh_CN.GB18030 GB18030' \
+            'zh_TW.UTF-8 UTF-8' 'zh_TW.Big5 Big5' 'zh_HK.UTF-8 UTF-8' \
+            'ja_JP.UTF-8 UTF-8' 'ko_KR.UTF-8 UTF-8' 'de_DE.UTF-8 UTF-8' \
+            'fr_FR.UTF-8 UTF-8' 'es_ES.UTF-8 UTF-8' 'ru_RU.UTF-8 UTF-8' \
+            'pt_BR.UTF-8 UTF-8' 'C.UTF-8 UTF-8' 'POSIX POSIX' \
+            | sudo tee $PREFIX/etc/locale.gen > /dev/null
       
       - name: 创建 locale 支持脚本
         run: |
