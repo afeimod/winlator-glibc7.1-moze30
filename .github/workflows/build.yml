@@ -604,7 +604,7 @@ jobs:
   build-gcc-libs:
     name: 构建 GCC-Libs
     runs-on: ubuntu-24.04
-    needs: build-locales
+    needs: [setup-build-env, build-locales]
     
     steps:
       - name: 准备环境
