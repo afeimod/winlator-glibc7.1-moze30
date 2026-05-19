@@ -437,6 +437,11 @@ jobs:
       - name: 创建 locale.alias 文件
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
+          
+          # 创建必要的目录
+          sudo mkdir -p $PREFIX/share/locale
+          sudo chmod -R 777 $PREFIX/share/locale
+          
           printf '%s\n' \
             '# Locale 别名文件 - 支持中文及其他语言' \
             '# This file maps locale names to locale archive names' \
@@ -499,12 +504,13 @@ jobs:
             '' \
             '# 默认映射' \
             'default                 C.UTF-8' \
-            > $PREFIX/share/locale/locale.alias
+            | sudo tee $PREFIX/share/locale/locale.alias > /dev/null
       
       - name: 创建中文 locale charmap 文件
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           sudo mkdir -p $PREFIX/share/i18n/charmaps
+          sudo chmod -R 777 $PREFIX/share/i18n
           
           # 创建 GB2312 charmap
           printf '%s\n' \
@@ -549,12 +555,13 @@ jobs:
             'SP      \\x20' \
             '% Character set mapping' \
             'END CHARMAP' \
-            > $PREFIX/share/i18n/charmaps/GB2312
+            | sudo tee $PREFIX/share/i18n/charmaps/GB2312 > /dev/null
       
       - name: 创建环境变量配置文件
         run: |
           PREFIX=/data/data/com.winlator/files/imagefs/usr
           sudo mkdir -p $PREFIX/etc/profile.d
+          sudo chmod -R 777 $PREFIX/etc/profile.d
           printf '%s\n' \
             '# Locale 环境变量配置' \
             '# 支持中文显示' \
@@ -584,7 +591,7 @@ jobs:
             '# 提示信息本地化' \
             'export TEXTDOMAIN=coreutils' \
             "export TEXTDOMAINDIR=\$PREFIX/share/locale" \
-            > $PREFIX/etc/profile.d/locale.sh
+            | sudo tee $PREFIX/etc/profile.d/locale.sh > /dev/null
           sudo chmod +x $PREFIX/etc/profile.d/locale.sh
       
       - name: 上传 Locales
