@@ -776,6 +776,8 @@ jobs:
           export CC=aarch64-linux-gnu-gcc
           export AR=aarch64-linux-gnu-ar
           export RANLIB=aarch64-linux-gnu-ranlib
+          sudo mkdir -p /opt/build
+          sudo chmod -R 777 /opt/build
           sudo ./configure --prefix=/data/data/com.winlator/files/imagefs/usr
           sudo make -j$(nproc)
           sudo make install DESTDIR=$PWD/package
