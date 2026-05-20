@@ -847,6 +847,11 @@ jobs:
           sudo tar -xzf ncurses-6.5.tar.gz
           cd ncurses-6.5
           # 使用交叉编译器编译 ncurses（构建 ARM64 目标库）
+          # 设置环境变量确保 configure 和 make 都使用交叉编译器
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
+          export AR=aarch64-linux-gnu-ar
+          export RANLIB=aarch64-linux-gnu-ranlib
           sudo ./configure \
             --host=aarch64-linux-gnu \
             --build=x86_64-linux-gnu \
@@ -864,9 +869,9 @@ jobs:
             --without-ada \
             --without-strip \
             --mandir=/data/data/com.winlator/files/imagefs/usr/share/man
-          sudo make -j$(nproc)
-          sudo make install
-          sudo sed -i 's/^INSTALL_PROG\s*=.*/INSTALL_PROG = $(INSTALL)/' progs/Makefile
+          sudo env "PATH=/usr/bin:/bin:/usr/local/bin:$PATH" make -j$(nproc)
+          sudo env "PATH=/usr/bin:/bin:/usr/local/bin:$PATH" make install
+          sudo env "PATH=/usr/bin:/bin:/usr/local/bin:$PATH" sed -i 's/^INSTALL_PROG\s*=.*/INSTALL_PROG = $(INSTALL)/' progs/Makefile
           
           DEST=/data/data/com.winlator/files/imagefs
           PREF=$DEST/usr
