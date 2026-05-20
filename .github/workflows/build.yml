@@ -901,7 +901,8 @@ jobs:
             sudo patch -p0 < "readline82-${num}"
           done
           sudo sed -i 's|-Wl,-rpath,$(libdir) ||g' support/shobj-conf
-          sudo ./configure \
+          # 明确设置交叉编译器，确保使用 aarch64-linux-gnu 工具链
+          sudo CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ ./configure \
             --host=aarch64-linux-gnu \
             --build=x86_64-linux-gnu \
             --prefix=/data/data/com.winlator/files/imagefs/usr \
@@ -920,6 +921,13 @@ jobs:
           cd openssl-3.4.1
           # 设置PATH确保交叉编译器可用
           export PATH="/usr/bin:/bin:/usr/local/bin:/usr/aarch64-linux-gnu/bin:$PATH"
+          # 明确设置交叉编译器环境变量，确保构建工具链正确
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
+          export AR=aarch64-linux-gnu-ar
+          export LD=aarch64-linux-gnu-ld
+          export RANLIB=aarch64-linux-gnu-ranlib
+          export CROSS_COMPILE=aarch64-linux-gnu-
           # 确认交叉编译器存在
           which aarch64-linux-gnu-gcc || ls -la /usr/bin/aarch64-linux-gnu-gcc || ls -la /usr/aarch64-linux-gnu/bin/*
           sudo ./Configure linux-aarch64 \
