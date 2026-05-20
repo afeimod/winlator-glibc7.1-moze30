@@ -908,26 +908,45 @@ jobs:
       - name: 构建 openssl
         run: |
           cd /opt
+          # 切换到 /opt 目录（OpenSSL 构建需要在源码目录执行）
           sudo wget -q https://github.com/openssl/openssl/releases/download/openssl-3.4.1/openssl-3.4.1.tar.gz
           sudo tar -xf openssl-3.4.1.tar.gz
           cd openssl-3.4.1
-          sudo ./Configure linux-aarch64 \
+          
+          # 设置交叉编译工具链路径
+          export PATH=/usr/bin:$PATH
+          export CC=/usr/bin/aarch64-linux-gnu-gcc
+          export AR=/usr/bin/aarch64-linux-gnu-ar
+          export AS=/usr/bin/aarch64-linux-gnu-as
+          export LD=/usr/bin/aarch64-linux-gnu-ld
+          export NM=/usr/bin/aarch64-linux-gnu-nm
+          export RANLIB=/usr/bin/aarch64-linux-gnu-ranlib
+          export STRIP=/usr/bin/aarch64-linux-gnu-strip
+          
+          # 配置 OpenSSL（使用完整路径避免找不到编译器）
+          sudo /usr/bin/perl ./Configure linux-aarch64 \
             --prefix=/data/data/com.winlator/files/imagefs/usr \
             --openssldir=/data/data/com.winlator/files/imagefs/usr/etc/ssl \
             --libdir=/data/data/com.winlator/files/imagefs/usr/lib \
             shared \
             enable-ktls \
             no-afalgeng
-          sudo sed -i 's/^CC=.*/CC= aarch64-linux-gnu-gcc/' Makefile
-          sudo sed -i 's/^AR=.*/AR= aarch64-linux-gnu-ar/' Makefile
-          sudo sed -i 's/^AS=.*/AS= aarch64-linux-gnu-as/' Makefile
-          sudo sed -i 's/^LD=.*/LD= aarch64-linux-gnu-ld/' Makefile
-          sudo sed -i 's/^NM=.*/NM= aarch64-linux-gnu-nm/' Makefile
-          sudo sed -i 's/^RANLIB=.*/RANLIB= aarch64-linux-gnu-ranlib/' Makefile
-          sudo sed -i 's/^STRIP=.*/STRIP= aarch64-linux-gnu-strip/' Makefile
-          sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=/' Makefile
+          
+          # 修正 Makefile 中的交叉编译工具（确保使用正确的工具链）
+          sudo sed -i 's|^CC=.*|CC= /usr/bin/aarch64-linux-gnu-gcc|' Makefile
+          sudo sed -i 's|^AR=.*|AR= /usr/bin/aarch64-linux-gnu-ar|' Makefile
+          sudo sed -i 's|^AS=.*|AS= /usr/bin/aarch64-linux-gnu-as|' Makefile
+          sudo sed -i 's|^LD=.*|LD= /usr/bin/aarch64-linux-gnu-ld|' Makefile
+          sudo sed -i 's|^NM=.*|NM= /usr/bin/aarch64-linux-gnu-nm|' Makefile
+          sudo sed -i 's|^RANLIB=.*|RANLIB= /usr/bin/aarch64-linux-gnu-ranlib|' Makefile
+          sudo sed -i 's|^STRIP=.*|STRIP= /usr/bin/aarch64-linux-gnu-strip|' Makefile
+          sudo sed -i 's|^CROSS_COMPILE=.*|CROSS_COMPILE=|' Makefile
+          
+          # 清理并重新编译
           sudo make depend
           sudo make -j$(nproc)
+          
+          # 安装 OpenSSL
           sudo make install \
             MANDIR=/data/data/com.winlator/files/imagefs/usr/share/man \
             MANSUFFIX=ssl \
