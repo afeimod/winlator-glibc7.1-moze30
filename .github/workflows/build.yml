@@ -798,15 +798,9 @@ jobs:
     steps:
       - name: 准备环境
         run: |
-          # 安装交叉编译工具链（关键依赖）
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
-          # 创建工作目录
           sudo mkdir -p /data/data/com.winlator/files/imagefs/usr
           sudo mkdir -p /data/data/com.winlator/files/imagefs/tmp
           sudo chmod -R 777 /data/data/com.winlator/files/imagefs
-          # 验证交叉编译器已安装
-          which aarch64-linux-gnu-gcc && echo "Cross-compiler installed successfully"
       
       - name: 下载构建环境
         uses: actions/download-artifact@v4
@@ -924,16 +918,14 @@ jobs:
             shared \
             enable-ktls \
             no-afalgeng
-          # 修改Makefile中的工具链变量，使用绝对路径
-          sudo sed -i 's|^CC=|CC=|' Makefile
-          sudo sed -i 's|^CC=.*|CC= /usr/bin/aarch64-linux-gnu-gcc|' Makefile
-          sudo sed -i 's|^AR=.*|AR= /usr/bin/aarch64-linux-gnu-ar|' Makefile
-          sudo sed -i 's|^AS=.*|AS= /usr/bin/aarch64-linux-gnu-as|' Makefile
-          sudo sed -i 's|^LD=.*|LD= /usr/bin/aarch64-linux-gnu-ld|' Makefile
-          sudo sed -i 's|^NM=.*|NM= /usr/bin/aarch64-linux-gnu-nm|' Makefile
-          sudo sed -i 's|^RANLIB=.*|RANLIB= /usr/bin/aarch64-linux-gnu-ranlib|' Makefile
-          sudo sed -i 's|^STRIP=.*|STRIP= /usr/bin/aarch64-linux-gnu-strip|' Makefile
-          sudo sed -i 's|^CROSS_COMPILE=.*|CROSS_COMPILE=aarch64-linux-gnu-|' Makefile
+          sudo sed -i 's/^CC=.*/CC= aarch64-linux-gnu-gcc/' Makefile
+          sudo sed -i 's/^AR=.*/AR= aarch64-linux-gnu-ar/' Makefile
+          sudo sed -i 's/^AS=.*/AS= aarch64-linux-gnu-as/' Makefile
+          sudo sed -i 's/^LD=.*/LD= aarch64-linux-gnu-ld/' Makefile
+          sudo sed -i 's/^NM=.*/NM= aarch64-linux-gnu-nm/' Makefile
+          sudo sed -i 's/^RANLIB=.*/RANLIB= aarch64-linux-gnu-ranlib/' Makefile
+          sudo sed -i 's/^STRIP=.*/STRIP= aarch64-linux-gnu-strip/' Makefile
+          sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=/' Makefile
           sudo make depend
           sudo make -j$(nproc)
           sudo make install \
