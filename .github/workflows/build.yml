@@ -846,7 +846,8 @@ jobs:
           sudo wget -q https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz
           sudo tar -xzf ncurses-6.5.tar.gz
           cd ncurses-6.5
-          sudo ./configure \
+          # 使用原生编译器进行主机检查，交叉编译器用于目标编译
+          sudo CC=gcc CXX=g++ ./configure \
             --host=aarch64-linux-gnu \
             --build=x86_64-linux-gnu \
             --prefix=/data/data/com.winlator/files/imagefs/usr \
