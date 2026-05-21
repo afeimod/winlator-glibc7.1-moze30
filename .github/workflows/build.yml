@@ -921,19 +921,19 @@ jobs:
             enable-ktls \
             no-afalgeng
           
-          # 修正 Makefile 中的交叉编译工具（使用完整绝对路径确保 sudo 环境可用）
-          sudo sed -i 's/^CC=.*/CC= \/usr\/bin\/aarch64-linux-gnu-gcc/' Makefile
-          sudo sed -i 's/^AR=.*/AR= \/usr\/bin\/aarch64-linux-gnu-ar/' Makefile
-          sudo sed -i 's/^AS=.*/AS= \/usr\/bin\/aarch64-linux-gnu-as/' Makefile
-          sudo sed -i 's/^LD=.*/LD= \/usr\/bin\/aarch64-linux-gnu-ld/' Makefile
-          sudo sed -i 's/^NM=.*/NM= \/usr\/bin\/aarch64-linux-gnu-nm/' Makefile
-          sudo sed -i 's/^RANLIB=.*/RANLIB= \/usr\/bin\/aarch64-linux-gnu-ranlib/' Makefile
-          sudo sed -i 's/^STRIP=.*/STRIP= \/usr\/bin\/aarch64-linux-gnu-strip/' Makefile
+          # 修正 Makefile 中的交叉编译工具
+          sudo sed -i 's/^CC=.*/CC= aarch64-linux-gnu-gcc/' Makefile
+          sudo sed -i 's/^AR=.*/AR= aarch64-linux-gnu-ar/' Makefile
+          sudo sed -i 's/^AS=.*/AS= aarch64-linux-gnu-as/' Makefile
+          sudo sed -i 's/^LD=.*/LD= aarch64-linux-gnu-ld/' Makefile
+          sudo sed -i 's/^NM=.*/NM= aarch64-linux-gnu-nm/' Makefile
+          sudo sed -i 's/^RANLIB=.*/RANLIB= aarch64-linux-gnu-ranlib/' Makefile
+          sudo sed -i 's/^STRIP=.*/STRIP= aarch64-linux-gnu-strip/' Makefile
           sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=/' Makefile
           
-          # 生成依赖并编译
-          sudo make depend
-          sudo make -j$(nproc)
+          # 生成依赖并编译（关键：确保 PATH 包含 /usr/bin）
+          sudo env PATH="/usr/bin:$PATH" make depend
+          sudo env PATH="/usr/bin:$PATH" make -j$(nproc)
           
           # 安装 OpenSSL
           sudo make install \
