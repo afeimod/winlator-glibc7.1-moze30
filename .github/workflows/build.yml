@@ -921,19 +921,22 @@ jobs:
             enable-ktls \
             no-afalgeng
           
-          # 修正 Makefile 中的交叉编译工具
-          sudo sed -i 's/^CC=.*/CC= aarch64-linux-gnu-gcc/' Makefile
-          sudo sed -i 's/^AR=.*/AR= aarch64-linux-gnu-ar/' Makefile
-          sudo sed -i 's/^AS=.*/AS= aarch64-linux-gnu-as/' Makefile
-          sudo sed -i 's/^LD=.*/LD= aarch64-linux-gnu-ld/' Makefile
-          sudo sed -i 's/^NM=.*/NM= aarch64-linux-gnu-nm/' Makefile
-          sudo sed -i 's/^RANLIB=.*/RANLIB= aarch64-linux-gnu-ranlib/' Makefile
-          sudo sed -i 's/^STRIP=.*/STRIP= aarch64-linux-gnu-strip/' Makefile
+          # 修正 Makefile 中的交叉编译工具（清除 CROSS_COMPILE 并设置工具路径）
           sudo sed -i 's/^CROSS_COMPILE=.*/CROSS_COMPILE=/' Makefile
           
-          # 生成依赖并编译（关键：确保 PATH 包含 /usr/bin）
-          sudo env PATH="/usr/bin:$PATH" make depend
-          sudo env PATH="/usr/bin:$PATH" make -j$(nproc)
+          # 设置环境变量确保编译工具可用
+          export CC=/usr/bin/aarch64-linux-gnu-gcc
+          export AR=/usr/bin/aarch64-linux-gnu-ar
+          export AS=/usr/bin/aarch64-linux-gnu-as
+          export LD=/usr/bin/aarch64-linux-gnu-ld
+          export NM=/usr/bin/aarch64-linux-gnu-nm
+          export RANLIB=/usr/bin/aarch64-linux-gnu-ranlib
+          export STRIP=/usr/bin/aarch64-linux-gnu-strip
+          export PATH="/usr/bin:$PATH"
+          
+          # 生成依赖并编译
+          sudo make depend
+          sudo make -j$(nproc)
           
           # 安装 OpenSSL
           sudo make install \
